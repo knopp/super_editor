@@ -330,6 +330,10 @@ class AttributedSpans {
       throw Exception('removeAttribution() did not satisfy start < 0 and start > end, start: $start, end: $end');
     }
 
+    if (!hasAttributionsWithin(attributions: {attributionToRemove}, start: start, end: end)) {
+      return;
+    }
+
     // It's possible that a span we want to remove was started before the
     // removal region and/or ended after the removal region. Therefore,
     // the first thing we do is cut off those outer spans one unit before

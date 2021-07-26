@@ -90,36 +90,31 @@ class _SuperIOSTextfieldDemoState extends State<SuperIOSTextfieldDemo> {
   }
 
   Widget _buildTextField() {
+    int? minLines;
+    int? maxLines;
     switch (_sizeMode) {
       case TextFieldSizeMode.singleLine:
-        return SuperIOSTextfield(
-          textController: _textController,
-          textStyleBuilder: _styleBuilder,
-          selectionColor: Colors.blue.withOpacity(0.4),
-          controlsColor: Colors.blue,
-          minLines: 1,
-          maxLines: 1,
-          showDebugPaint: _showDebugPaint,
-        );
+        minLines = 1;
+        maxLines = 1;
+        break;
       case TextFieldSizeMode.short:
-        return SuperIOSTextfield(
-          textController: _textController,
-          textStyleBuilder: _styleBuilder,
-          selectionColor: Colors.blue.withOpacity(0.4),
-          controlsColor: Colors.blue,
-          maxLines: 4,
-          showDebugPaint: _showDebugPaint,
-        );
+        maxLines = 4;
+        break;
       case TextFieldSizeMode.tall:
-        return SuperIOSTextfield(
-          textController: _textController,
-          textStyleBuilder: _styleBuilder,
-          selectionColor: Colors.blue.withOpacity(0.4),
-          controlsColor: Colors.blue,
-          maxLines: null,
-          showDebugPaint: _showDebugPaint,
-        );
+        // no-op
+        break;
     }
+
+    return SuperIOSTextfield(
+      textController: _textController,
+      textStyleBuilder: _styleBuilder,
+      selectionColor: Colors.blue.withOpacity(0.4),
+      controlsColor: Colors.blue,
+      minLines: minLines,
+      maxLines: maxLines,
+      textInputAction: TextInputAction.done,
+      showDebugPaint: _showDebugPaint,
+    );
   }
 
   TextStyle _styleBuilder(Set<Attribution> attributions) {

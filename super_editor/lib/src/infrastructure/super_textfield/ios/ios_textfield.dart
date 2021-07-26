@@ -5,19 +5,20 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:super_editor/src/default_editor/super_editor.dart';
 import 'package:super_editor/src/infrastructure/_listenable_builder.dart';
-import 'package:super_editor/src/infrastructure/text_layout.dart';
+import 'package:super_editor/src/infrastructure/attributed_spans.dart';
 
 import '../../attributed_text.dart';
 import '../../super_selectable_text.dart';
 import '../super_textfield.dart' hide SuperTextFieldScrollview, SuperTextFieldScrollviewState;
 import '_caret.dart';
+import '_floating_cursor.dart';
 import '_user_interaction.dart';
 
 export '_caret.dart';
-export '_user_interaction.dart';
 export '_handles.dart';
 export '_magnifier.dart';
 export '_toolbar.dart';
+export '_user_interaction.dart';
 
 class SuperIOSTextfield extends StatefulWidget {
   const SuperIOSTextfield({
@@ -30,7 +31,9 @@ class SuperIOSTextfield extends StatefulWidget {
     this.minLines,
     this.maxLines = 1,
     this.padding = EdgeInsets.zero,
+    this.textInputAction = TextInputAction.done,
     this.showDebugPaint = false,
+    this.onPerformActionPressed,
   }) : super(key: key);
 
   final FocusNode? focusNode;
@@ -48,7 +51,13 @@ class SuperIOSTextfield extends StatefulWidget {
 
   final EdgeInsets padding;
 
+  final TextInputAction textInputAction;
+
   final bool showDebugPaint;
+
+  /// Callback invoked when the user presses the "action" button
+  /// on the keyboard, e.g., "done", "call", "emergency", etc.
+  final Function(TextInputAction)? onPerformActionPressed;
 
   @override
   _SuperIOSTextfieldState createState() => _SuperIOSTextfieldState();
@@ -97,6 +106,12 @@ class _SuperIOSTextfieldState extends State<SuperIOSTextfield> implements TextIn
       _focusNode.addListener(_onFocusChange);
     }
 
+    if (widget.textInputAction != oldWidget.textInputAction && _textInputConnection != null) {
+      _textInputConnection!.updateConfig(TextInputConfiguration(
+        inputAction: widget.textInputAction,
+      ));
+    }
+
     if (widget.textController != oldWidget.textController) {
       _textEditingController.removeListener(_sendEditingValueToPlatform);
       if (widget.textController != null) {
@@ -134,12 +149,15 @@ class _SuperIOSTextfieldState extends State<SuperIOSTextfield> implements TextIn
   bool get _isMultiline => widget.minLines != 1 || widget.maxLines != 1;
 
   void _onFocusChange() {
-    print('Textfield focus change ($hashCode) - has focus: ${_focusNode.hasFocus}');
     if (_focusNode.hasFocus) {
       if (_textInputConnection == null) {
         print('Attaching TextInputClient to TextInput');
         setState(() {
-          _textInputConnection = TextInput.attach(this, const TextInputConfiguration());
+          _textInputConnection = TextInput.attach(
+              this,
+              TextInputConfiguration(
+                inputAction: widget.textInputAction,
+              ));
           _textInputConnection!
             ..show()
             ..setEditingState(currentTextEditingValue!);
@@ -157,7 +175,6 @@ class _SuperIOSTextfieldState extends State<SuperIOSTextfield> implements TextIn
 
   void _sendEditingValueToPlatform() {
     if (_textInputConnection != null && _textInputConnection!.attached) {
-      print('Sending value to platform. Selection: ${currentTextEditingValue!.selection}');
       _textInputConnection!.setEditingState(currentTextEditingValue!);
     }
   }
@@ -173,11 +190,7 @@ class _SuperIOSTextfieldState extends State<SuperIOSTextfield> implements TextIn
 
   @override
   void performAction(TextInputAction action) {
-    // performAction() is called when the "done" button is pressed in
-    // various "text configurations". For example, sometimes the "done"
-    // button says "Call" or "Next", depending on the current text input
-    // configuration. We don't need to worry about this for a barebones
-    // implementation.
+    widget.onPerformActionPressed?.call(action);
   }
 
   @override
@@ -190,8 +203,15 @@ class _SuperIOSTextfieldState extends State<SuperIOSTextfield> implements TextIn
 
   @override
   void showAutocorrectionPromptRect(int start, int end) {
-    // I'm not sure why iOS wants to show an "autocorrection" rectangle
-    // when we already have a selection visible.
+    // This method reports auto-correct bounds when the user selects
+    // text with shift+arrow keys on desktop. I'm not sure how to
+    // trigger this using only touch interactions. In any event, we're
+    // never told when to get rid of the auto-correct range. Therefore,
+    // for now, I'm leaving this un-implemented.
+
+    // _textEditingController.text
+    //   ..removeAttribution(AutoCorrectAttribution(), TextRange(start: 0, end: _textEditingController.text.text.length))
+    //   ..addAttribution(AutoCorrectAttribution(), TextRange(start: start, end: end));
   }
 
   @override
@@ -306,15 +326,25 @@ class _SuperIOSTextfieldState extends State<SuperIOSTextfield> implements TextIn
           child: ListenableBuilder(
             listenable: _textEditingController,
             builder: (context) {
-              print('Building SuperSelectableText with selection: ${_textEditingController.selection}');
+              final textSpan = _textEditingController.text.text.isNotEmpty
+                  ? _textEditingController.text.computeTextSpan((attributions) {
+                      final style = widget.textStyleBuilder(attributions);
+                      return attributions.contains(AutoCorrectAttribution())
+                          ? style.copyWith(
+                              decoration: TextDecoration.underline,
+                            )
+                          : style;
+                    })
+                  : AttributedText(text: 'enter text').computeTextSpan(
+                      (attributions) => widget.textStyleBuilder(attributions).copyWith(color: Colors.grey));
+
               return Padding(
                 padding: widget.padding,
                 child: Stack(
                   children: [
-                    SuperSelectableText.plain(
+                    SuperSelectableText(
                       key: _textKey,
-                      text:
-                          _textEditingController.text.text.isNotEmpty ? _textEditingController.text.text : 'enter text',
+                      textSpan: textSpan,
                       textSelection: _textEditingController.selection,
                       textSelectionDecoration: TextSelectionDecoration(selectionColor: widget.selectionColor),
                       showCaret: true,
@@ -322,7 +352,6 @@ class _SuperIOSTextfieldState extends State<SuperIOSTextfield> implements TextIn
                         color: _floatingCursorController.isShowingFloatingCursor ? Colors.grey : widget.controlsColor,
                         width: 2,
                       ),
-                      style: widget.textStyleBuilder({}),
                     ),
                     Positioned(
                       left: 0,
@@ -344,117 +373,19 @@ class _SuperIOSTextfieldState extends State<SuperIOSTextfield> implements TextIn
   }
 }
 
-/// An iOS floating cursor.
-///
-/// Displays a red caret at a position and height determined
-/// by the given [FloatingCursorController].
-///
-/// An [IOSFloatingCursor] should be displayed on top of the
-/// associated text and it should have the same width and
-/// height as the text it corresponds with.
-class IOSFloatingCursor extends StatelessWidget {
-  const IOSFloatingCursor({
-    Key? key,
-    required this.controller,
-  }) : super(key: key);
-
-  final FloatingCursorController controller;
+class AutoCorrectAttribution extends Attribution {
+  @override
+  String get id => 'AutoCorrect';
 
   @override
-  Widget build(BuildContext context) {
-    return ListenableBuilder(
-      listenable: controller,
-      builder: (context) {
-        return Stack(
-          children: [
-            if (controller.isShowingFloatingCursor)
-              Positioned(
-                left: controller.floatingCursorOffset.dx,
-                top: controller.floatingCursorOffset.dy,
-                child: Container(
-                  width: 2,
-                  height: controller.floatingCursorHeight,
-                  color: Colors.red,
-                ),
-              ),
-          ],
-        );
-      },
-    );
+  bool canMergeWith(Attribution other) {
+    return other is AutoCorrectAttribution;
   }
-}
 
-/// Controller for an iOS floating cursor.
-///
-/// Floating cursor [Point] data should be forwarded from a [TextInputClient]
-/// to [updateFloatingCursor()], along with a [TextLayout]. The platform only
-/// provides pixel drag offsets, therefore the [TextLayout] is needed to obtain
-/// the offset of the original selection, as well as map new offsets back to
-/// [TextPosition]s.
-class FloatingCursorController with ChangeNotifier {
-  FloatingCursorController({
-    required AttributedTextEditingController textController,
-  }) : _textController = textController;
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) || other is AutoCorrectAttribution && runtimeType == other.runtimeType;
 
-  final AttributedTextEditingController _textController;
-
-  Offset? _floatingCursorStartOffset;
-  Offset? _floatingCursorCurrentOffset;
-
-  /// Whether the user is currently using the floating cursor.
-  bool get isShowingFloatingCursor => _floatingCursorCurrentOffset != null;
-
-  /// The current offset of the floating cursor from the top-left
-  /// corner of the associated text.
-  ///
-  /// Callers must ensure that [isShowingFloatingCursor] is `true`
-  /// before invoking [floatingCursorOffset].
-  Offset get floatingCursorOffset => _floatingCursorStartOffset! + _floatingCursorCurrentOffset!;
-
-  double _floatingCursorHeight = 0;
-
-  /// The current height of the floating cursor.
-  ///
-  /// The cursor height is determined by the line height of the current
-  /// [TextPosition].
-  ///
-  /// Returns `0.0` when the floating cursor is not being used.
-  double get floatingCursorHeight => _floatingCursorHeight;
-
-  void updateFloatingCursor(TextLayout textLayout, RawFloatingCursorPoint point) {
-    switch (point.state) {
-      case FloatingCursorDragState.Start:
-        _floatingCursorStartOffset = textLayout.getOffsetAtPosition(_textController.selection.extent);
-        _floatingCursorCurrentOffset = point.offset;
-
-        final textPosition =
-            textLayout.getPositionNearestToOffset(_floatingCursorStartOffset! + _floatingCursorCurrentOffset!);
-
-        _floatingCursorHeight = textLayout.getLineHeightAtPosition(textPosition);
-
-        _textController.selection = TextSelection.collapsed(
-          offset: textPosition.offset,
-        );
-        break;
-      case FloatingCursorDragState.Update:
-        _floatingCursorCurrentOffset = point.offset;
-
-        final textPosition =
-            textLayout.getPositionNearestToOffset(_floatingCursorStartOffset! + _floatingCursorCurrentOffset!);
-
-        _floatingCursorHeight = textLayout.getLineHeightAtPosition(textPosition);
-
-        _textController.selection = TextSelection.collapsed(
-          offset: textPosition.offset,
-        );
-        break;
-      case FloatingCursorDragState.End:
-        _floatingCursorStartOffset = null;
-        _floatingCursorCurrentOffset = null;
-        _floatingCursorHeight = 0;
-        break;
-    }
-
-    notifyListeners();
-  }
+  @override
+  int get hashCode => 0;
 }
