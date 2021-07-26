@@ -115,3 +115,9 @@ enum HandleDirection {
   /// side. In right-to-left text, it's the left side.
   downstream,
 }
+
+enum HandleDragMode {
+  collapsed,
+  base,
+  extent,
+}

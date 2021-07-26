@@ -14,6 +14,8 @@ class _SuperIOSTextfieldDemoState extends State<SuperIOSTextfieldDemo> {
           text:
               'This is a custom textfield implementation called SuperIOSTextfield. It is super long so that we can mess with scrolling. This drags it out even further so that we can get multiline scrolling, too. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Proin tempor sapien est, in eleifend purus rhoncus fringilla. Class aptent taciti sociosqu ad litora torquent per conubia nostra, per inceptos himenaeos. Nulla varius libero lorem, eget tincidunt ante porta accumsan. Morbi quis ante at nunc molestie ullamcorper.'));
 
+  TextFieldSizeMode _sizeMode = TextFieldSizeMode.short;
+
   bool _showDebugPaint = false;
 
   @override
@@ -35,33 +37,7 @@ class _SuperIOSTextfieldDemoState extends State<SuperIOSTextfieldDemo> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      SuperIOSTextfield(
-                        textController: _textController,
-                        textStyleBuilder: _styleBuilder,
-                        selectionColor: Colors.blue.withOpacity(0.4),
-                        controlsColor: Colors.blue,
-                        minLines: 1,
-                        maxLines: 1,
-                        showDebugPaint: _showDebugPaint,
-                      ),
-                      const SizedBox(height: 48),
-                      SuperIOSTextfield(
-                        textController: _textController,
-                        textStyleBuilder: _styleBuilder,
-                        selectionColor: Colors.blue.withOpacity(0.4),
-                        controlsColor: Colors.blue,
-                        maxLines: 4,
-                        showDebugPaint: _showDebugPaint,
-                      ),
-                      const SizedBox(height: 48),
-                      SuperIOSTextfield(
-                        textController: _textController,
-                        textStyleBuilder: _styleBuilder,
-                        selectionColor: Colors.blue.withOpacity(0.4),
-                        controlsColor: Colors.blue,
-                        maxLines: null,
-                        showDebugPaint: _showDebugPaint,
-                      ),
+                      _buildTextField(),
                     ],
                   ),
                 ),
@@ -78,7 +54,72 @@ class _SuperIOSTextfieldDemoState extends State<SuperIOSTextfieldDemo> {
         },
         child: Icon(Icons.bug_report),
       ),
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: _sizeMode == TextFieldSizeMode.singleLine
+            ? 0
+            : _sizeMode == TextFieldSizeMode.short
+                ? 1
+                : 2,
+        items: const [
+          BottomNavigationBarItem(
+            icon: Icon(Icons.short_text),
+            label: 'Single Line',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.wrap_text_rounded),
+            label: 'Short',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.wrap_text_rounded),
+            label: 'Tall',
+          ),
+        ],
+        onTap: (int newIndex) {
+          setState(() {
+            if (newIndex == 0) {
+              _sizeMode = TextFieldSizeMode.singleLine;
+            } else if (newIndex == 1) {
+              _sizeMode = TextFieldSizeMode.short;
+            } else if (newIndex == 2) {
+              _sizeMode = TextFieldSizeMode.tall;
+            }
+          });
+        },
+      ),
     );
+  }
+
+  Widget _buildTextField() {
+    switch (_sizeMode) {
+      case TextFieldSizeMode.singleLine:
+        return SuperIOSTextfield(
+          textController: _textController,
+          textStyleBuilder: _styleBuilder,
+          selectionColor: Colors.blue.withOpacity(0.4),
+          controlsColor: Colors.blue,
+          minLines: 1,
+          maxLines: 1,
+          showDebugPaint: _showDebugPaint,
+        );
+      case TextFieldSizeMode.short:
+        return SuperIOSTextfield(
+          textController: _textController,
+          textStyleBuilder: _styleBuilder,
+          selectionColor: Colors.blue.withOpacity(0.4),
+          controlsColor: Colors.blue,
+          maxLines: 4,
+          showDebugPaint: _showDebugPaint,
+        );
+      case TextFieldSizeMode.tall:
+        return SuperIOSTextfield(
+          textController: _textController,
+          textStyleBuilder: _styleBuilder,
+          selectionColor: Colors.blue.withOpacity(0.4),
+          controlsColor: Colors.blue,
+          maxLines: null,
+          showDebugPaint: _showDebugPaint,
+        );
+    }
   }
 
   TextStyle _styleBuilder(Set<Attribution> attributions) {
@@ -88,4 +129,10 @@ class _SuperIOSTextfieldDemoState extends State<SuperIOSTextfieldDemo> {
       height: 1.4,
     );
   }
+}
+
+enum TextFieldSizeMode {
+  singleLine,
+  short,
+  tall,
 }

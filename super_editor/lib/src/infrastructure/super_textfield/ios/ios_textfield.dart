@@ -10,10 +10,10 @@ import '../../attributed_text.dart';
 import '../../super_selectable_text.dart';
 import '../super_textfield.dart' hide SuperTextFieldScrollview, SuperTextFieldScrollviewState;
 import '_caret.dart';
-import '_editing_controls.dart';
+import '_user_interaction.dart';
 
 export '_caret.dart';
-export '_editing_controls.dart';
+export '_user_interaction.dart';
 export '_handles.dart';
 export '_magnifier.dart';
 export '_toolbar.dart';
@@ -103,6 +103,11 @@ class _SuperIOSTextfieldState extends State<SuperIOSTextfield> implements TextIn
       _textEditingController.addListener(_sendEditingValueToPlatform);
       _sendEditingValueToPlatform();
     }
+
+    if (widget.minLines != oldWidget.minLines || widget.maxLines != oldWidget.maxLines) {
+      // Force a new viewport height calculation.
+      _needViewportHeight = true;
+    }
   }
 
   @override
@@ -125,7 +130,7 @@ class _SuperIOSTextfieldState extends State<SuperIOSTextfield> implements TextIn
   bool get _isMultiline => widget.minLines != 1 || widget.maxLines != 1;
 
   void _onFocusChange() {
-    print('Textfield focus change - has focus: ${_focusNode.hasFocus}');
+    print('Textfield focus change ($hashCode) - has focus: ${_focusNode.hasFocus}');
     if (_focusNode.hasFocus) {
       if (_textInputConnection == null) {
         print('Attaching TextInputClient to TextInput');
@@ -137,7 +142,7 @@ class _SuperIOSTextfieldState extends State<SuperIOSTextfield> implements TextIn
         });
       }
     } else {
-      print('Detaching TextInputClient from TextInput');
+      print('Detaching TextInputClient from TextInput.');
       setState(() {
         _textInputConnection?.close();
         _textInputConnection = null;
@@ -288,6 +293,7 @@ class _SuperIOSTextfieldState extends State<SuperIOSTextfield> implements TextIn
           child: ListenableBuilder(
             listenable: _textEditingController,
             builder: (context) {
+              print('Building SuperSelectableText with selection: ${_textEditingController.selection}');
               return Padding(
                 padding: widget.padding,
                 child: SuperSelectableText.plain(
