@@ -1,5 +1,5 @@
 class Logger {
-  static bool _printLogs = false;
+  static bool _printLogs = true;
   static void setLoggingMode(bool enabled) {
     _printLogs = enabled;
   }

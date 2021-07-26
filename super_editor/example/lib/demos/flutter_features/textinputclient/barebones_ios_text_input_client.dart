@@ -2,15 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:super_editor/super_editor.dart';
 
-/// Demo that displays a very limited text field, constructed from
-/// the ground up, and using [TextInput] for user interaction instead
+/// Demo that displays a very limited iOS text field, constructed from
+/// the ground up, using [TextInput] for user interaction instead
 /// of a [RawKeyboardListener] or similar.
-class BasicTextInputClientDemo extends StatefulWidget {
+class BarebonesIosTextInputClientDemo extends StatefulWidget {
   @override
-  _BasicTextInputClientDemoState createState() => _BasicTextInputClientDemoState();
+  _BarebonesIosTextInputClientDemoState createState() => _BarebonesIosTextInputClientDemoState();
 }
 
-class _BasicTextInputClientDemoState extends State<BasicTextInputClientDemo> {
+class _BarebonesIosTextInputClientDemoState extends State<BarebonesIosTextInputClientDemo> {
   final _screenFocusNode = FocusNode();
 
   @override

@@ -9,6 +9,9 @@ abstract class TextLayout {
   /// Returns the [TextPosition] that overlaps the given [localOffset].
   TextPosition? getPositionAtOffset(Offset localOffset);
 
+  /// Returns the height of the character at the given [position].
+  double getLineHeightAtPosition(TextPosition position);
+
   /// Returns the [TextPosition] that overlaps the given [localOffset],
   /// or the [TextPosition] that is nearest the given [localOffset] if
   /// no [TextPosition] overlaps the given [localOffset].
@@ -16,6 +19,17 @@ abstract class TextLayout {
 
   /// Returns the [Offset] of the character at the given [position].
   Offset getOffsetAtPosition(TextPosition position);
+
+  /// Returns the [Offset] to place a caret that precedes the given
+  /// [position].
+  Offset getOffsetForCaret(TextPosition position);
+
+  /// Returns the height that a caret should occupy when the caret
+  /// is placed at the given [position].
+  ///
+  /// The return type is nullable because the underlying implementation
+  /// is also nullable. It's unclear when or why the value would be `null`.
+  double? getHeightForCaret(TextPosition position);
 
   /// Returns a [List] of [TextBox]es that contain the given [selection].
   List<TextBox> getBoxesForSelection(TextSelection selection);

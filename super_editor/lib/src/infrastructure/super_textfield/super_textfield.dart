@@ -13,9 +13,9 @@ import 'package:super_editor/src/infrastructure/_logging.dart';
 import 'package:super_editor/src/infrastructure/super_selectable_text.dart';
 import 'package:super_editor/src/infrastructure/text_layout.dart';
 
-import 'attributed_text.dart';
-import 'keyboard.dart';
-import 'multi_tap_gesture.dart';
+import '../attributed_text.dart';
+import '../keyboard.dart';
+import '../multi_tap_gesture.dart';
 
 final _log = Logger(scope: 'super_textfield.dart');
 
@@ -501,8 +501,8 @@ class _SuperTextFieldGestureInteractorState extends State<SuperTextFieldGestureI
       _dragRectInViewport = null;
     });
 
-    _textScroll._stopScrollingToStart();
-    _textScroll._stopScrollingToEnd();
+    _textScroll.stopScrollingToStart();
+    _textScroll.stopScrollingToEnd();
   }
 
   void _onPanCancel() {
@@ -512,8 +512,8 @@ class _SuperTextFieldGestureInteractorState extends State<SuperTextFieldGestureI
       _dragRectInViewport = null;
     });
 
-    _textScroll._stopScrollingToStart();
-    _textScroll._stopScrollingToEnd();
+    _textScroll.stopScrollingToStart();
+    _textScroll.stopScrollingToEnd();
   }
 
   void _updateDragSelection() {
@@ -649,11 +649,11 @@ class _SuperTextFieldGestureInteractorState extends State<SuperTextFieldGestureI
     final speedPercent = 1.0 - (gutterAmount / _dragGutterExtent);
     final scrollAmount = lerpDouble(0, _maxDragSpeed, speedPercent)!;
 
-    _textScroll._startScrollingToStart(amountPerFrame: scrollAmount);
+    _textScroll.startScrollingToStart(amountPerFrame: scrollAmount);
   }
 
   void _stopScrollingToStart() {
-    _textScroll._stopScrollingToStart();
+    _textScroll.stopScrollingToStart();
   }
 
   void _startScrollingToEnd() {
@@ -668,11 +668,11 @@ class _SuperTextFieldGestureInteractorState extends State<SuperTextFieldGestureI
     final speedPercent = 1.0 - (gutterAmount / _dragGutterExtent);
     final scrollAmount = lerpDouble(0, _maxDragSpeed, speedPercent)!;
 
-    _textScroll._startScrollingToEnd(amountPerFrame: scrollAmount);
+    _textScroll.startScrollingToEnd(amountPerFrame: scrollAmount);
   }
 
   void _stopScrollingToEnd() {
-    _textScroll._stopScrollingToEnd();
+    _textScroll.stopScrollingToEnd();
   }
 
   void _updateCursorStyle(Offset cursorOffset) {
@@ -1048,7 +1048,7 @@ class SuperTextFieldScrollviewState extends State<SuperTextFieldScrollview> with
     }
   }
 
-  void _startScrollingToStart({required double amountPerFrame}) {
+  void startScrollingToStart({required double amountPerFrame}) {
     assert(amountPerFrame > 0);
 
     if (_scrollToStartOnTick) {
@@ -1060,7 +1060,7 @@ class SuperTextFieldScrollviewState extends State<SuperTextFieldScrollview> with
     _ticker.start();
   }
 
-  void _stopScrollingToStart() {
+  void stopScrollingToStart() {
     if (!_scrollToStartOnTick) {
       return;
     }
@@ -1070,7 +1070,7 @@ class SuperTextFieldScrollviewState extends State<SuperTextFieldScrollview> with
     _ticker.stop();
   }
 
-  void _scrollToStart() {
+  void scrollToStart() {
     if (widget.scrollController.offset <= 0) {
       return;
     }
@@ -1078,7 +1078,7 @@ class SuperTextFieldScrollviewState extends State<SuperTextFieldScrollview> with
     widget.scrollController.position.jumpTo(widget.scrollController.offset - _scrollAmountPerFrame);
   }
 
-  void _startScrollingToEnd({required double amountPerFrame}) {
+  void startScrollingToEnd({required double amountPerFrame}) {
     assert(amountPerFrame > 0);
 
     if (_scrollToEndOnTick) {
@@ -1090,7 +1090,7 @@ class SuperTextFieldScrollviewState extends State<SuperTextFieldScrollview> with
     _ticker.start();
   }
 
-  void _stopScrollingToEnd() {
+  void stopScrollingToEnd() {
     if (!_scrollToEndOnTick) {
       return;
     }
@@ -1100,7 +1100,7 @@ class SuperTextFieldScrollviewState extends State<SuperTextFieldScrollview> with
     _ticker.stop();
   }
 
-  void _scrollToEnd() {
+  void scrollToEnd() {
     if (widget.scrollController.offset >= widget.scrollController.position.maxScrollExtent) {
       return;
     }
@@ -1110,10 +1110,10 @@ class SuperTextFieldScrollviewState extends State<SuperTextFieldScrollview> with
 
   void _onTick(elapsedTime) {
     if (_scrollToStartOnTick) {
-      _scrollToStart();
+      scrollToStart();
     }
     if (_scrollToEndOnTick) {
-      _scrollToEnd();
+      scrollToEnd();
     }
   }
 

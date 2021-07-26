@@ -2,18 +2,20 @@ import 'package:example/demos/demo_RTL.dart';
 import 'package:example/demos/demo_markdown_serialization.dart';
 import 'package:example/demos/demo_paragraphs.dart';
 import 'package:example/demos/demo_selectable_text.dart';
-import 'package:example/demos/flutter_features/textinputclient/basic_text_input_client.dart';
-import 'package:example/demos/flutter_features/textinputclient/edittext.dart';
-import 'package:example/demos/supertextfield/demo_textfield.dart';
 import 'package:example/demos/example_editor/example_editor.dart';
+import 'package:example/demos/flutter_features/textinputclient/basic_text_input_client.dart';
+import 'package:example/demos/flutter_features/textinputclient/demo_superiostextfield.dart';
+import 'package:example/demos/flutter_features/textinputclient/edittext.dart';
 import 'package:example/demos/sliver_example_editor.dart';
+import 'package:example/demos/supertextfield/demo_textfield.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_gen/gen_l10n/app_localizations.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 
 import 'demos/demo_attributed_text.dart';
 import 'demos/demo_document_loses_focus.dart';
 import 'demos/demo_switch_document_content.dart';
+import 'demos/flutter_features/textinputclient/demo_superandroidtextfield.dart';
 
 /// Demo of a basic text editor, as well as various widgets that
 /// are available in this package.
@@ -240,6 +242,20 @@ final _menu = <_MenuGroup>[
         title: 'Basic TextInputClient',
         pageBuilder: (context) {
           return BasicTextInputClientDemo();
+        },
+      ),
+      _MenuItem(
+        icon: Icons.text_fields,
+        title: 'Super iOS Textfield',
+        pageBuilder: (context) {
+          return SuperIOSTextfieldDemo();
+        },
+      ),
+      _MenuItem(
+        icon: Icons.text_fields,
+        title: 'Super Android Textfield',
+        pageBuilder: (context) {
+          return SuperAndroidTextfieldDemo();
         },
       ),
     ],

@@ -200,6 +200,36 @@ class SuperSelectableTextState extends State<SuperSelectableText> implements Tex
   }
 
   @override
+  double getLineHeightAtPosition(TextPosition position) {
+    if (_renderParagraph == null) {
+      throw Exception('SelectableText does not yet have a RenderParagraph. Can\'t getBoxesForSelection().');
+    }
+    if (kDebugMode && _renderParagraph!.debugNeedsLayout) {
+      return 0.0;
+    }
+
+    return _renderParagraph!.getFullHeightForCaret(position) ?? 0;
+  }
+
+  @override
+  Offset getOffsetForCaret(TextPosition position) {
+    if (_renderParagraph == null) {
+      throw Exception('SelectableText does not yet have a RenderParagraph. Can\'t getBoxesForSelection().');
+    }
+
+    return _renderParagraph!.getOffsetForCaret(position, Rect.zero);
+  }
+
+  @override
+  double? getHeightForCaret(TextPosition position) {
+    if (_renderParagraph == null) {
+      throw Exception('SelectableText does not yet have a RenderParagraph. Can\'t getBoxesForSelection().');
+    }
+
+    return _renderParagraph!.getFullHeightForCaret(position);
+  }
+
+  @override
   List<TextBox> getBoxesForSelection(TextSelection selection) {
     if (_renderParagraph == null) {
       throw Exception('SelectableText does not yet have a RenderParagraph. Can\'t getBoxesForSelection().');
@@ -415,18 +445,24 @@ class SuperSelectableTextState extends State<SuperSelectableText> implements Tex
       });
     }
 
-    return Stack(
-      children: [
-        _FillWidthIfConstrained(
-          child: _buildTextSelection(),
+    // The only item in this Stack with intrinsic height is the text.
+    // We wrap with IntrinsicHeight so that the text selection widget and
+    // the text controls widget have explicit bounds so that they can
+    // position their content relative to the text without inadvertently
+    // expanding to take up all available space on the screen.
+    return IntrinsicHeight(
+      child: IntrinsicWidth(
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            _buildTextSelection(),
+            _FillWidthIfConstrained(
+              child: _buildText(),
+            ),
+            _buildTextCaret(),
+          ],
         ),
-        _FillWidthIfConstrained(
-          child: _buildText(),
-        ),
-        _FillWidthIfConstrained(
-          child: _buildTextCaret(),
-        ),
-      ],
+      ),
     );
   }
 
@@ -462,9 +498,8 @@ class SuperSelectableTextState extends State<SuperSelectableText> implements Tex
     return RepaintBoundary(
       child: widget.textCaretFactory.build(
         context: context,
-        renderParagraph: _renderParagraph!,
-        position: widget.textSelection.extent,
-        lineHeight: _lineHeight,
+        textLayout: this,
+        selection: widget.textSelection,
         isTextEmpty: _textLength == 0,
         showCaret: widget.showCaret,
       ),
@@ -554,78 +589,76 @@ class _TextSelectionPainter extends CustomPainter {
 
 class TextCaretFactory {
   const TextCaretFactory({
-    required this.color,
-    this.width = 1.0,
-    this.borderRadius = BorderRadius.zero,
-  });
+    required Color color,
+    double width = 1.0,
+    BorderRadius borderRadius = BorderRadius.zero,
+  })  : _color = color,
+        _width = width,
+        _borderRadius = borderRadius;
 
-  final Color color;
-  final double width;
-  final BorderRadius borderRadius;
+  final Color _color;
+  final double _width;
+  final BorderRadius _borderRadius;
 
   Widget build({
     required BuildContext context,
-    required RenderParagraph renderParagraph,
-    required TextPosition position,
-    required double lineHeight,
+    required TextLayout textLayout,
+    required TextSelection selection,
     required bool isTextEmpty,
     required bool showCaret,
   }) {
-    return _BlinkingCaret(
-      renderParagraph: renderParagraph,
-      color: color,
-      width: width,
-      borderRadius: borderRadius,
-      textPosition: position,
-      lineHeight: lineHeight,
+    return BlinkingCaret(
+      textLayout: textLayout,
+      color: _color,
+      width: _width,
+      borderRadius: _borderRadius,
+      textPosition: selection.extent,
       isTextEmpty: isTextEmpty,
       showCaret: showCaret,
     );
   }
 }
 
-class _BlinkingCaret extends StatefulWidget {
-  const _BlinkingCaret({
+class BlinkingCaret extends StatefulWidget {
+  const BlinkingCaret({
     Key? key,
-    required this.renderParagraph,
+    required this.textLayout,
     required this.color,
     required this.width,
     required this.borderRadius,
     required this.textPosition,
-    required this.lineHeight,
     required this.isTextEmpty,
     required this.showCaret,
   }) : super(key: key);
 
-  final RenderParagraph renderParagraph;
+  final TextLayout textLayout;
   final Color color;
   final double width;
   final BorderRadius borderRadius;
   final TextPosition textPosition;
-  final double lineHeight;
   final bool isTextEmpty;
   final bool showCaret;
 
   @override
-  _BlinkingCaretState createState() => _BlinkingCaretState();
+  BlinkingCaretState createState() => BlinkingCaretState();
 }
 
-class _BlinkingCaretState extends State<_BlinkingCaret> with SingleTickerProviderStateMixin {
+class BlinkingCaretState extends State<BlinkingCaret> with SingleTickerProviderStateMixin {
   // Controls the blinking caret animation.
-  late _CaretBlinkController _caretBlinkController;
+  late CaretBlinkController _caretBlinkController;
 
   @override
   void initState() {
     super.initState();
 
-    _caretBlinkController = _CaretBlinkController(
+    _caretBlinkController = CaretBlinkController(
       tickerProvider: this,
     );
     _caretBlinkController.caretPosition = widget.textPosition;
   }
 
   @override
-  void didUpdateWidget(_BlinkingCaret oldWidget) {
+  void didUpdateWidget(BlinkingCaret oldWidget) {
     super.didUpdateWidget(oldWidget);
 
     _caretBlinkController.caretPosition = widget.textPosition;
@@ -642,11 +675,10 @@ class _BlinkingCaretState extends State<_BlinkingCaret> with SingleTickerProvide
     return CustomPaint(
       painter: _CursorPainter(
         blinkController: _caretBlinkController,
-        paragraph: widget.renderParagraph,
+        textLayout: widget.textLayout,
         width: widget.width,
         borderRadius: widget.borderRadius,
         caretTextPosition: widget.textPosition.offset,
-        lineHeight: widget.lineHeight,
         caretColor: widget.color,
         isTextEmpty: widget.isTextEmpty,
         showCaret: widget.showCaret,
@@ -658,23 +690,21 @@ class _BlinkingCaretState extends State<_BlinkingCaret> with SingleTickerProvide
 class _CursorPainter extends CustomPainter {
   _CursorPainter({
     required this.blinkController,
-    required this.paragraph,
+    required this.textLayout,
     required this.width,
     required this.borderRadius,
     required this.caretTextPosition,
-    required this.lineHeight,
     required this.caretColor,
     required this.isTextEmpty,
     required this.showCaret,
   })  : caretPaint = Paint()..color = caretColor,
         super(repaint: blinkController);
 
-  final _CaretBlinkController blinkController;
-  final RenderParagraph paragraph;
+  final CaretBlinkController blinkController;
+  final TextLayout textLayout;
   final int caretTextPosition;
   final double width;
   final BorderRadius borderRadius;
-  final double lineHeight; // TODO: this should probably also come from the TextPainter (#46).
   final bool isTextEmpty;
   final bool showCaret;
   final Color caretColor;
@@ -692,11 +722,12 @@ class _CursorPainter extends CustomPainter {
 
     caretPaint.color = caretColor.withOpacity(blinkController.opacity);
 
-    final caretHeight = paragraph.getFullHeightForCaret(TextPosition(offset: caretTextPosition)) ?? lineHeight;
+    final lineHeight = textLayout.getLineHeightAtPosition(TextPosition(offset: caretTextPosition));
+    final caretHeight = textLayout.getHeightForCaret(TextPosition(offset: caretTextPosition)) ?? lineHeight;
 
     Offset caretOffset = isTextEmpty
         ? Offset(0, (lineHeight - caretHeight) / 2)
-        : paragraph.getOffsetForCaret(TextPosition(offset: caretTextPosition), Rect.zero);
+        : textLayout.getOffsetForCaret(TextPosition(offset: caretTextPosition));
 
     if (borderRadius == BorderRadius.zero) {
       canvas.drawRect(
@@ -727,15 +758,15 @@ class _CursorPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_CursorPainter oldDelegate) {
-    return paragraph != oldDelegate.paragraph ||
+    return textLayout != oldDelegate.textLayout ||
         caretTextPosition != oldDelegate.caretTextPosition ||
         isTextEmpty != oldDelegate.isTextEmpty ||
         showCaret != oldDelegate.showCaret;
   }
 }
 
-class _CaretBlinkController with ChangeNotifier {
-  _CaretBlinkController({
+class CaretBlinkController with ChangeNotifier {
+  CaretBlinkController({
     required TickerProvider tickerProvider,
     Duration flashPeriod = const Duration(milliseconds: 500),
   }) : _animationController = AnimationController(
