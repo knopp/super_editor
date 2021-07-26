@@ -8,6 +8,14 @@ import '_magnifier.dart';
 import '_toolbar.dart';
 import '_user_interaction.dart';
 
+// TODO: idea - EditingOverlayController
+// - showMagnifier
+// - hideMagnifier
+// - showToolbar
+// - hideToolbar
+// - showHandlesWhenSelectionExpanded
+// - hideHandles
+
 /// Editing controls for an iOS-style text field.
 ///
 /// [IOSEditingControls] is intended to be displayed in the app's
@@ -162,8 +170,6 @@ class _IOSEditingControlsState extends State<IOSEditingControls> {
       });
       return const SizedBox();
     }
-    final textFieldBox = textFieldRenderObject as RenderBox;
-    final textFieldGlobalOffset = textFieldBox.localToGlobal(Offset.zero);
 
     return Stack(
       children: [
@@ -194,8 +200,11 @@ class _IOSEditingControlsState extends State<IOSEditingControls> {
     if (widget.selection.isCollapsed) {
       final extentOffsetInText = widget.selectableTextKey.currentState!.getOffsetAtPosition(widget.selection.extent);
       final extentOffsetInViewport = widget.interactorKey.currentState!.textOffsetToViewportOffset(extentOffsetInText);
+      final lineHeight = widget.selectableTextKey.currentState!.getLineHeightAtPosition(widget.selection.extent);
+
       toolbarTopAnchor = extentOffsetInViewport - const Offset(0, toolbarGap);
-      toolbarBottomAnchor = extentOffsetInViewport + const Offset(0, 20 + toolbarGap); // TODO: use real line height
+      toolbarBottomAnchor = extentOffsetInViewport + Offset(0, lineHeight) + const Offset(0, toolbarGap);
+      print('Collapsed top anchor offset in viewport: $toolbarTopAnchor');
     } else {
       final selectionBoxes = widget.selectableTextKey.currentState!.getBoxesForSelection(widget.selection);
       Rect selectionBounds = selectionBoxes.first.toRect();
@@ -209,7 +218,7 @@ class _IOSEditingControlsState extends State<IOSEditingControls> {
       final selectionBottomInText = selectionBounds.bottomCenter;
       final selectionBottomInViewport =
           widget.interactorKey.currentState!.textOffsetToViewportOffset(selectionBottomInText);
-      toolbarBottomAnchor = selectionBottomInViewport + const Offset(0, 20 + toolbarGap);
+      toolbarBottomAnchor = selectionBottomInViewport + const Offset(0, toolbarGap);
     }
 
     // The selection might start above the visible area in a scrollable
@@ -226,13 +235,16 @@ class _IOSEditingControlsState extends State<IOSEditingControls> {
     // The selection might end below the visible area in a scrollable
     // text field. In that case, we don't want the toolbar to sit more
     // than [toolbarGap] below the text field.
+    final viewportHeight = (widget.textFieldViewportKey.currentContext!.findRenderObject() as RenderBox).size.height;
     toolbarTopAnchor = Offset(
       toolbarTopAnchor.dx,
       min(
         toolbarTopAnchor.dy,
-        toolbarGap,
+        viewportHeight + toolbarGap,
       ),
     );
+
+    print('Adjusted top anchor: $toolbarTopAnchor');
 
     final textFieldGlobalOffset =
         (widget.textFieldViewportKey.currentContext!.findRenderObject() as RenderBox).localToGlobal(Offset.zero);
@@ -343,18 +355,12 @@ class _IOSEditingControlsState extends State<IOSEditingControls> {
     bool showExtentHandle = false;
     if (widget.textContentOffsetLink.leader != null) {
       final textFieldBox = widget.textFieldViewportKey.currentContext!.findRenderObject() as RenderBox;
-      final textFieldGlobalOffset = textFieldBox.localToGlobal(Offset.zero);
       final textFieldRect = Offset.zero & textFieldBox.size;
-
-      final selectableTextBox = widget.selectableTextKey.currentContext!.findRenderObject() as RenderBox;
 
       const estimatedHandleVisualSize = Size(24, 24);
 
-      final upstreamCaretGlobalOffset = selectableTextBox.localToGlobal(upstreamCaretOffset) - const Offset(-12, -5);
       final estimatedBaseHandleRect = upstreamCaretOffset & estimatedHandleVisualSize;
 
-      final downstreamCaretGlobalOffset =
-          selectableTextBox.localToGlobal(downstreamCaretOffset) - const Offset(-12, -5);
       final estimatedExtentHandleRect = downstreamCaretOffset & estimatedHandleVisualSize;
 
       showBaseHandle = _isDraggingBase ||
@@ -363,18 +369,12 @@ class _IOSEditingControlsState extends State<IOSEditingControls> {
       showExtentHandle = _isDraggingExtent ||
           widget.handleDragMode == HandleDragMode.extent ||
           textFieldRect.overlaps(estimatedExtentHandleRect);
-
-      // print('TextField Rect: $textFieldRect');
-      // print('Base handle Rect: $estimatedBaseHandleRect');
-      // print('Extent handle Rect: $estimatedExtentHandleRect');
     }
 
     if (!showExtentHandle) {
       print('Hiding extent handle');
     }
 
-    // print('Upstream caret viewport offset: $upstreamCaretOffset');
-    // print('Downstream caret viewport offset: $downstreamCaretOffset');
     return [
       if (showBaseHandle) ...[
         // Left-bounding handle touch target
@@ -456,14 +456,14 @@ class ToolbarPositionDelegate extends SingleChildLayoutDelegate {
   @override
   Offset getPositionForChild(Size size, Size childSize) {
     final fitsAboveTextField = (textFieldGlobalOffset.dy + desiredTopAnchorInTextField.dy) > 100;
-    final desiredAnchor = fitsAboveTextField ? desiredTopAnchorInTextField : desiredBottomAnchorInTextField;
+    final desiredAnchor = fitsAboveTextField
+        ? desiredTopAnchorInTextField
+        : (desiredBottomAnchorInTextField + Offset(0, childSize.height));
 
     final desiredTopLeft = desiredAnchor - Offset(childSize.width / 2, childSize.height);
 
     double x = max(desiredTopLeft.dx, -textFieldGlobalOffset.dx);
     x = min(x, size.width - childSize.width - textFieldGlobalOffset.dx);
-
-    // TODO: constrain the y-value
 
     final constrainedOffset = Offset(x, desiredTopLeft.dy);
 
@@ -471,6 +471,7 @@ class ToolbarPositionDelegate extends SingleChildLayoutDelegate {
     // print(' - available space: $size');
     // print(' - child size: $childSize');
     // print(' - text field offset: $textFieldGlobalOffset');
+    // print(' - ideal y-position: ${textFieldGlobalOffset.dy + desiredTopAnchorInTextField.dy}');
     // print(' - fits above text field: $fitsAboveTextField');
     // print(' - desired anchor: $desiredAnchor');
     // print(' - desired top left: $desiredTopLeft');

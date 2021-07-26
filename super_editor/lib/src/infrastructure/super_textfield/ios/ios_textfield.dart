@@ -5,6 +5,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:super_editor/src/default_editor/super_editor.dart';
 import 'package:super_editor/src/infrastructure/_listenable_builder.dart';
+import 'package:super_editor/src/infrastructure/text_layout.dart';
 
 import '../../attributed_text.dart';
 import '../../super_selectable_text.dart';
@@ -62,6 +63,7 @@ class _SuperIOSTextfieldState extends State<SuperIOSTextfield> implements TextIn
   late FocusNode _focusNode;
 
   late AttributedTextEditingController _textEditingController;
+  late FloatingCursorController _floatingCursorController;
   TextInputConnection? _textInputConnection;
 
   bool _needViewportHeight = true;
@@ -77,6 +79,8 @@ class _SuperIOSTextfieldState extends State<SuperIOSTextfield> implements TextIn
 
     _textEditingController = (widget.textController ?? AttributedTextEditingController())
       ..addListener(_sendEditingValueToPlatform);
+
+    _floatingCursorController = FloatingCursorController(textController: _textEditingController);
   }
 
   @override
@@ -153,6 +157,7 @@ class _SuperIOSTextfieldState extends State<SuperIOSTextfield> implements TextIn
 
   void _sendEditingValueToPlatform() {
     if (_textInputConnection != null && _textInputConnection!.attached) {
+      print('Sending value to platform. Selection: ${currentTextEditingValue!.selection}');
       _textInputConnection!.setEditingState(currentTextEditingValue!);
     }
   }
@@ -191,13 +196,21 @@ class _SuperIOSTextfieldState extends State<SuperIOSTextfield> implements TextIn
 
   @override
   void updateEditingValue(TextEditingValue value) {
+    // TODO: find out why this issue occurs
+    //       We ignore platform updates while the floating cursor is moving
+    //       because the platform seems to be undoing our floating cursor
+    //       changes.
+    if (_floatingCursorController.isShowingFloatingCursor) {
+      return;
+    }
+
     _textEditingController.text = AttributedText(text: value.text);
     _textEditingController.selection = value.selection;
   }
 
   @override
   void updateFloatingCursor(RawFloatingCursorPoint point) {
-    // no-op: this is an iOS-only behavior
+    _floatingCursorController.updateFloatingCursor(_textKey.currentState!, point);
   }
 
   @override
@@ -296,17 +309,31 @@ class _SuperIOSTextfieldState extends State<SuperIOSTextfield> implements TextIn
               print('Building SuperSelectableText with selection: ${_textEditingController.selection}');
               return Padding(
                 padding: widget.padding,
-                child: SuperSelectableText.plain(
-                  key: _textKey,
-                  text: _textEditingController.text.text.isNotEmpty ? _textEditingController.text.text : 'enter text',
-                  textSelection: _textEditingController.selection,
-                  textSelectionDecoration: TextSelectionDecoration(selectionColor: widget.selectionColor),
-                  showCaret: true,
-                  textCaretFactory: IOSTextFieldCaretFactory(
-                    color: widget.controlsColor,
-                    width: 2,
-                  ),
-                  style: widget.textStyleBuilder({}),
+                child: Stack(
+                  children: [
+                    SuperSelectableText.plain(
+                      key: _textKey,
+                      text:
+                          _textEditingController.text.text.isNotEmpty ? _textEditingController.text.text : 'enter text',
+                      textSelection: _textEditingController.selection,
+                      textSelectionDecoration: TextSelectionDecoration(selectionColor: widget.selectionColor),
+                      showCaret: true,
+                      textCaretFactory: IOSTextFieldCaretFactory(
+                        color: _floatingCursorController.isShowingFloatingCursor ? Colors.grey : widget.controlsColor,
+                        width: 2,
+                      ),
+                      style: widget.textStyleBuilder({}),
+                    ),
+                    Positioned(
+                      left: 0,
+                      top: 0,
+                      right: 0,
+                      bottom: 0,
+                      child: IOSFloatingCursor(
+                        controller: _floatingCursorController,
+                      ),
+                    ),
+                  ],
                 ),
               );
             },
@@ -314,5 +341,120 @@ class _SuperIOSTextfieldState extends State<SuperIOSTextfield> implements TextIn
         ),
       ),
     );
+  }
+}
+
+/// An iOS floating cursor.
+///
+/// Displays a red caret at a position and height determined
+/// by the given [FloatingCursorController].
+///
+/// An [IOSFloatingCursor] should be displayed on top of the
+/// associated text and it should have the same width and
+/// height as the text it corresponds with.
+class IOSFloatingCursor extends StatelessWidget {
+  const IOSFloatingCursor({
+    Key? key,
+    required this.controller,
+  }) : super(key: key);
+
+  final FloatingCursorController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: controller,
+      builder: (context) {
+        return Stack(
+          children: [
+            if (controller.isShowingFloatingCursor)
+              Positioned(
+                left: controller.floatingCursorOffset.dx,
+                top: controller.floatingCursorOffset.dy,
+                child: Container(
+                  width: 2,
+                  height: controller.floatingCursorHeight,
+                  color: Colors.red,
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+/// Controller for an iOS floating cursor.
+///
+/// Floating cursor [Point] data should be forwarded from a [TextInputClient]
+/// to [updateFloatingCursor()], along with a [TextLayout]. The platform only
+/// provides pixel drag offsets, therefore the [TextLayout] is needed to obtain
+/// the offset of the original selection, as well as map new offsets back to
+/// [TextPosition]s.
+class FloatingCursorController with ChangeNotifier {
+  FloatingCursorController({
+    required AttributedTextEditingController textController,
+  }) : _textController = textController;
+
+  final AttributedTextEditingController _textController;
+
+  Offset? _floatingCursorStartOffset;
+  Offset? _floatingCursorCurrentOffset;
+
+  /// Whether the user is currently using the floating cursor.
+  bool get isShowingFloatingCursor => _floatingCursorCurrentOffset != null;
+
+  /// The current offset of the floating cursor from the top-left
+  /// corner of the associated text.
+  ///
+  /// Callers must ensure that [isShowingFloatingCursor] is `true`
+  /// before invoking [floatingCursorOffset].
+  Offset get floatingCursorOffset => _floatingCursorStartOffset! + _floatingCursorCurrentOffset!;
+
+  double _floatingCursorHeight = 0;
+
+  /// The current height of the floating cursor.
+  ///
+  /// The cursor height is determined by the line height of the current
+  /// [TextPosition].
+  ///
+  /// Returns `0.0` when the floating cursor is not being used.
+  double get floatingCursorHeight => _floatingCursorHeight;
+
+  void updateFloatingCursor(TextLayout textLayout, RawFloatingCursorPoint point) {
+    switch (point.state) {
+      case FloatingCursorDragState.Start:
+        _floatingCursorStartOffset = textLayout.getOffsetAtPosition(_textController.selection.extent);
+        _floatingCursorCurrentOffset = point.offset;
+
+        final textPosition =
+            textLayout.getPositionNearestToOffset(_floatingCursorStartOffset! + _floatingCursorCurrentOffset!);
+
+        _floatingCursorHeight = textLayout.getLineHeightAtPosition(textPosition);
+
+        _textController.selection = TextSelection.collapsed(
+          offset: textPosition.offset,
+        );
+        break;
+      case FloatingCursorDragState.Update:
+        _floatingCursorCurrentOffset = point.offset;
+
+        final textPosition =
+            textLayout.getPositionNearestToOffset(_floatingCursorStartOffset! + _floatingCursorCurrentOffset!);
+
+        _floatingCursorHeight = textLayout.getLineHeightAtPosition(textPosition);
+
+        _textController.selection = TextSelection.collapsed(
+          offset: textPosition.offset,
+        );
+        break;
+      case FloatingCursorDragState.End:
+        _floatingCursorStartOffset = null;
+        _floatingCursorCurrentOffset = null;
+        _floatingCursorHeight = 0;
+        break;
+    }
+
+    notifyListeners();
   }
 }
