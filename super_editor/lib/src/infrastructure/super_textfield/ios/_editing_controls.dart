@@ -1,20 +1,28 @@
 import 'dart:math';
 
 import 'package:flutter/material.dart';
+import 'package:super_editor/src/infrastructure/_listenable_builder.dart';
 import 'package:super_editor/src/infrastructure/super_selectable_text.dart';
+import 'package:super_editor/src/infrastructure/super_textfield/super_textfield.dart';
 
 import '_handles.dart';
 import '_magnifier.dart';
 import '_toolbar.dart';
 import '_user_interaction.dart';
 
-// TODO: idea - EditingOverlayController
-// - showMagnifier
-// - hideMagnifier
-// - showToolbar
-// - hideToolbar
-// - showHandlesWhenSelectionExpanded
-// - hideHandles
+// TODO: collaborating controllers:
+//  - AttributedTextEditingController
+//  - TextLayout
+//  - IOSEditingOverlayController
+//  - IOSTextFieldScrollController
+
+// Examples:
+// Autoscrolling:
+//  - scrollController.autoScrollIfDesired(referenceContext, offset)
+//  - scrollController.stopAutoScrolling()
+//
+// Show magnifier:
+//  - overlayController.showMagnifier(globalOffset)
 
 /// Editing controls for an iOS-style text field.
 ///
@@ -22,10 +30,10 @@ import '_user_interaction.dart';
 /// [Overlay] so that its controls appear on top of everything else
 /// in the app.
 ///
-/// When [showToolbar] is true, displays an iOS-style toolbar with
+/// When [showToolbar] is `true`, displays an iOS-style toolbar with
 /// buttons for various action like cut, copy, paste, etc.
 ///
-/// When [showMagnifier] is true, displays an iOS-style magnifying
+/// When [showMagnifier] is `true`, displays an iOS-style magnifying
 /// glass that magnifies the content beneath the user's finger.
 ///
 /// When [selection] is expanded, displays iOS-style selection handles
@@ -35,16 +43,15 @@ import '_user_interaction.dart';
 class IOSEditingControls extends StatefulWidget {
   const IOSEditingControls({
     Key? key,
+    required this.editingController,
+    required this.textController,
     required this.textFieldViewportKey,
     required this.selectableTextKey,
     required this.textFieldLayerLink,
     required this.textContentOffsetLink,
     required this.interactorKey,
     required this.selection,
-    required this.showToolbar,
-    required this.showMagnifier,
     required this.handleDragMode,
-    this.draggingHandleLink,
     required this.handleColor,
     this.showDebugPaint = false,
     required this.onBaseHandleDragStart,
@@ -53,6 +60,10 @@ class IOSEditingControls extends StatefulWidget {
     required this.onPanEnd,
     required this.onPanCancel,
   }) : super(key: key);
+
+  final IOSEditingOverlayController editingController;
+
+  final AttributedTextEditingController textController;
 
   /// [GlobalKey] that references to the text field's viewport.
   final GlobalKey textFieldViewportKey;
@@ -75,18 +86,8 @@ class IOSEditingControls extends StatefulWidget {
   /// The current text selection within the text field.
   final TextSelection selection;
 
-  /// Whether to display the toolbar with actions like cut, copy, paste, etc.
-  final bool showToolbar;
-
-  /// Whether to show the magnifier that magnifies the content near
-  /// [draggingHandleLink].
-  final bool showMagnifier;
-
   /// The type of handle that is currently being dragged.
   final HandleDragMode? handleDragMode;
-
-  /// [LayerLink] that is anchored to the handle that is currently being dragged.
-  final LayerLink? draggingHandleLink;
 
   /// The color of the selection handles.
   final Color handleColor;
@@ -132,33 +133,114 @@ class _IOSEditingControlsState extends State<IOSEditingControls> {
 
   bool _isDraggingBase = false;
   bool _isDraggingExtent = false;
+  Offset? _dragOffset;
+
+  @override
+  void initState() {
+    super.initState();
+  }
+
+  @override
+  void didUpdateWidget(IOSEditingControls oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    print('didUpdateWidget, handle mode: ${widget.handleDragMode}');
+  }
+
+  @override
+  void dispose() {
+    super.dispose();
+  }
 
   void _onBasePanStart(DragStartDetails details) {
     print('_onBasePanStart');
     _isDraggingBase = true;
     _isDraggingExtent = false;
-    widget.onBaseHandleDragStart(details);
+    // widget.onBaseHandleDragStart(details);
+
+    // from user_interaction
+    // _autoScrollIfNearBoundary(details.globalPosition);
+
+    setState(() {
+      widget.editingController.hideToolbar();
+      _dragOffset = (context.findRenderObject() as RenderBox).globalToLocal(details.globalPosition);
+    });
   }
 
   void _onExtentPanStart(DragStartDetails details) {
     print('_onExtentPanStart');
     _isDraggingBase = false;
     _isDraggingExtent = true;
-    widget.onExtentHandleDragStart(details);
+    // widget.onExtentHandleDragStart(details);
+
+    // from user_interaction
+    // _autoScrollIfNearBoundary(details.globalPosition);
+
+    setState(() {
+      widget.editingController.hideToolbar();
+      _dragOffset = (context.findRenderObject() as RenderBox).globalToLocal(details.globalPosition);
+    });
+  }
+
+  void _onPanUpdate(DragUpdateDetails details) {
+    // widget.onPanUpdate(details);
+
+    // from user_interaction
+    final textBox = (widget.selectableTextKey.currentContext!.findRenderObject() as RenderBox);
+    final localOffset = textBox.globalToLocal(details.globalPosition);
+    final textLayout = widget.selectableTextKey.currentState!;
+    if (_isDraggingBase) {
+      widget.textController.selection = widget.textController.selection.copyWith(
+        baseOffset: textLayout.getPositionNearestToOffset(localOffset).offset,
+      );
+    } else if (_isDraggingExtent) {
+      widget.textController.selection = widget.textController.selection.copyWith(
+        extentOffset: textLayout.getPositionNearestToOffset(localOffset).offset,
+      );
+    }
+
+    // _autoScrollIfNearBoundary(details.globalPosition);
+
+    setState(() {
+      _dragOffset = _dragOffset! + details.delta;
+      widget.editingController.showMagnifier(_dragOffset!);
+    });
   }
 
   void _onPanEnd(DragEndDetails details) {
     print('_onPanEnd');
-    _isDraggingBase = false;
-    _isDraggingExtent = false;
-    widget.onPanEnd(details);
+    // widget.onPanEnd(details);
+
+    // from user_interaction
+    _onHandleDragEnd();
   }
 
   void _onPanCancel() {
     print('_onPanCancel');
-    _isDraggingBase = false;
-    _isDraggingExtent = false;
-    widget.onPanCancel();
+    // widget.onPanCancel();
+
+    // from user_interaction
+    _onHandleDragEnd();
+  }
+
+  void _onHandleDragEnd() {
+    print('_onHandleDragEnd()');
+    // stopScrolling();
+    //
+    // if (_isDraggingBase) {
+    //   _ensureTextPositionIsVisible(widget.textController.selection.base)
+    // } else if (_isDraggingExtent) {
+    //   _ensureTextPositionIsVisible(widget.textController.selection.extent);
+    // }
+
+    setState(() {
+      _isDraggingBase = false;
+      _isDraggingExtent = false;
+      widget.editingController.hideMagnifier();
+
+      if (!widget.textController.selection.isCollapsed) {
+        widget.editingController.showToolbar();
+      }
+    });
   }
 
   @override
@@ -171,25 +253,33 @@ class _IOSEditingControlsState extends State<IOSEditingControls> {
       return const SizedBox();
     }
 
-    return Stack(
-      children: [
-        ..._buildDraggableOverlayHandles(),
-        _buildToolbar(),
-        if (widget.showMagnifier)
-          Center(
-            child: FollowingMagnifier(
-              layerLink: widget.draggingHandleLink!,
-              aboveFingerGap: 72,
-              magnifierDiameter: 72,
-              magnifierScale: 2,
-            ),
-          )
-      ],
-    );
+    return MultiListenableBuilder(
+        listenables: {
+          widget.editingController,
+          widget.textController,
+        },
+        builder: (context) {
+          return Stack(
+            children: [
+              // Build the base and extent draggable handles
+              ..._buildDraggableOverlayHandles(),
+              // Build the editing toolbar
+              _buildToolbar(),
+              // Build the focal point for the magnifier
+              if (_isDraggingBase || _isDraggingExtent) _buildMagnifierFocalPoint(),
+              // Build the magnifier
+              if (widget.editingController.isMagnifierVisible) _buildMagnifier(),
+            ],
+          );
+        });
   }
 
   Widget _buildToolbar() {
     if (widget.selection.extentOffset < 0) {
+      return const SizedBox();
+    }
+
+    if (!widget.editingController.isToolbarVisible) {
       return const SizedBox();
     }
 
@@ -268,15 +358,15 @@ class _IOSEditingControlsState extends State<IOSEditingControls> {
         CompositedTransformFollower(
           link: widget.textFieldLayerLink,
           child: CustomSingleChildLayout(
-            delegate: ToolbarPositionDelegate(
+            delegate: _ToolbarPositionDelegate(
               textFieldGlobalOffset: textFieldGlobalOffset,
               desiredTopAnchorInTextField: toolbarTopAnchor,
               desiredBottomAnchorInTextField: toolbarBottomAnchor,
             ),
             child: IgnorePointer(
-              ignoring: !widget.showToolbar,
+              ignoring: !widget.editingController.isToolbarVisible,
               child: AnimatedOpacity(
-                opacity: widget.showToolbar ? 1.0 : 0.0,
+                opacity: widget.editingController.isToolbarVisible ? 1.0 : 0.0,
                 duration: const Duration(milliseconds: 150),
                 child: IOSTextfieldToolbar(
                   onCutPressed: () {},
@@ -300,9 +390,7 @@ class _IOSEditingControlsState extends State<IOSEditingControls> {
       return [];
     }
 
-    if (widget.selection.isCollapsed &&
-        widget.handleDragMode != HandleDragMode.base &&
-        widget.handleDragMode != HandleDragMode.extent) {
+    if (widget.selection.isCollapsed && !_isDraggingBase && !_isDraggingExtent) {
       print('No handle drag mode -> no drag handles');
       // iOS does not display a drag handle when the selection is collapsed.
       return [];
@@ -387,7 +475,7 @@ class _IOSEditingControlsState extends State<IOSEditingControls> {
             child: GestureDetector(
               behavior: HitTestBehavior.translucent,
               onPanStart: selectionDirection == TextAffinity.downstream ? _onBasePanStart : _onExtentPanStart,
-              onPanUpdate: widget.onPanUpdate,
+              onPanUpdate: _onPanUpdate,
               onPanEnd: _onPanEnd,
               onPanCancel: _onPanCancel,
               child: Container(
@@ -412,7 +500,7 @@ class _IOSEditingControlsState extends State<IOSEditingControls> {
             offset: const Offset(-12, -5),
             child: GestureDetector(
               onPanStart: selectionDirection == TextAffinity.downstream ? _onExtentPanStart : _onBasePanStart,
-              onPanUpdate: widget.onPanUpdate,
+              onPanUpdate: _onPanUpdate,
               onPanEnd: _onPanEnd,
               onPanCancel: _onPanCancel,
               child: Container(
@@ -430,6 +518,40 @@ class _IOSEditingControlsState extends State<IOSEditingControls> {
     ];
   }
 
+  Widget _buildMagnifierFocalPoint() {
+    // When the user is dragging a handle in this overlay, we
+    // are responsible for positioning the focal point for the
+    // magnifier to follow. We do that here.
+    return Positioned(
+      left: _dragOffset!.dx,
+      top: _dragOffset!.dy,
+      child: CompositedTransformTarget(
+        link: widget.editingController.magnifierFocalPoint,
+        child: SizedBox(width: 1, height: 1),
+      ),
+    );
+  }
+
+  Widget _buildMagnifier() {
+    // Display a magnifier that tracks a focal point.
+    //
+    // When the user is dragging an overlay handle, we also place
+    // the LayerLink target.
+    //
+    // When some other interaction wants to show the magnifier, then
+    // that other area of the widget tree is responsible for
+    // positioning the LayerLink target.
+    return Center(
+      child: FollowingMagnifier(
+        // layerLink: _magnifierLink,
+        layerLink: widget.editingController.magnifierFocalPoint,
+        aboveFingerGap: 72,
+        magnifierDiameter: 72,
+        magnifierScale: 2,
+      ),
+    );
+  }
+
   void _scheduleRebuildBecauseTextIsNotLaidOutYet() {
     WidgetsBinding.instance!.addPostFrameCallback((timeStamp) {
       if (mounted) {
@@ -442,8 +564,74 @@ class _IOSEditingControlsState extends State<IOSEditingControls> {
   }
 }
 
-class ToolbarPositionDelegate extends SingleChildLayoutDelegate {
-  ToolbarPositionDelegate({
+class IOSEditingOverlayController with ChangeNotifier {
+  IOSEditingOverlayController({
+    required LayerLink magnifierFocalPoint,
+  }) : _magnifierFocalPoint = magnifierFocalPoint;
+
+  bool _isToolbarVisible = false;
+  bool get isToolbarVisible => _isToolbarVisible;
+
+  void toggleToolbar() {
+    if (isToolbarVisible) {
+      hideToolbar();
+    } else {
+      showToolbar();
+    }
+  }
+
+  void showToolbar() {
+    hideMagnifier();
+
+    _isToolbarVisible = true;
+
+    notifyListeners();
+  }
+
+  void hideToolbar() {
+    _isToolbarVisible = false;
+    notifyListeners();
+  }
+
+  final LayerLink _magnifierFocalPoint;
+  LayerLink get magnifierFocalPoint => _magnifierFocalPoint;
+
+  // Offset? _magnifierFocalPoint;
+  bool _isMagnifierVisible = false;
+  bool get isMagnifierVisible => _isMagnifierVisible;
+  // Offset? get magnifierFocalPoint => _magnifierFocalPoint;
+
+  void showMagnifier(Offset globalOffset) {
+    hideToolbar();
+
+    _isMagnifierVisible = true;
+    // _magnifierFocalPoint = globalOffset;
+
+    notifyListeners();
+  }
+
+  void hideMagnifier() {
+    _isMagnifierVisible = false;
+    // _magnifierFocalPoint = null;
+    notifyListeners();
+  }
+
+  bool _areSelectionHandlesVisible = false;
+  bool get areSelectionHandlesVisible => _areSelectionHandlesVisible;
+
+  void showSelectionHandles() {
+    _areSelectionHandlesVisible = true;
+    notifyListeners();
+  }
+
+  void hideSelectionHandles() {
+    _areSelectionHandlesVisible = false;
+    notifyListeners();
+  }
+}
+
+class _ToolbarPositionDelegate extends SingleChildLayoutDelegate {
+  _ToolbarPositionDelegate({
     required this.textFieldGlobalOffset,
     required this.desiredTopAnchorInTextField,
     required this.desiredBottomAnchorInTextField,

@@ -13,8 +13,6 @@ import 'package:super_editor/src/infrastructure/text_layout.dart';
 
 import '_editing_controls.dart';
 import '_handles.dart';
-import '_magnifier.dart';
-import '_toolbar.dart';
 
 // TODO: only scroll whole lines
 // TODO: ensure the extent is visible after a drag, after a scroll change,
@@ -71,6 +69,7 @@ class IOSTextfieldInteractor extends StatefulWidget {
     required this.focusNode,
     required this.textFieldLayerLink,
     required this.textController,
+    required this.editingController,
     required this.scrollKey,
     required this.scrollController,
     required this.viewportHeight,
@@ -102,6 +101,8 @@ class IOSTextfieldInteractor extends StatefulWidget {
   /// editing controls, and used to update the selection based on
   /// user interactions.
   final AttributedTextEditingController textController;
+
+  final IOSEditingOverlayController editingController;
 
   /// [ScrollController] that controls the scroll offset of this [IOSTextfieldInteractor].
   final ScrollController scrollController;
@@ -143,18 +144,8 @@ class IOSTextfieldInteractorState extends State<IOSTextfieldInteractor> with Tic
   // handle, or extent handle.
   HandleDragMode? _handleDragMode;
 
-  // LayerLink that is positioned wherever the current dragging
-  // handle is, whether that's a collapsed handle, base handle,
-  // or extent handle.
-  final _draggingHandleLink = LayerLink();
-
-  // The scroll offset when the user begins a drag gesture.
-  //
-  // This is combined with the drag delta to determine the location
-  // in text where the user is dragging.
-  Offset? _startDragScrollOffset;
-
   // The latest offset during a user's drag gesture.
+  Offset? _globalDragOffset;
   Offset? _dragOffset;
 
   final _textFieldViewportKey = GlobalKey();
@@ -170,8 +161,6 @@ class IOSTextfieldInteractorState extends State<IOSTextfieldInteractor> with Tic
   // positions the invisible touch targets for base/extent
   // dragging.
   OverlayEntry? _controlsOverlayEntry;
-  bool _showToolbar = false;
-  bool _showMagnifier = false;
 
   @override
   void initState() {
@@ -280,16 +269,15 @@ class IOSTextfieldInteractorState extends State<IOSTextfieldInteractor> with Tic
     if (_controlsOverlayEntry == null) {
       _controlsOverlayEntry = OverlayEntry(builder: (overlayContext) {
         return IOSEditingControls(
+          editingController: widget.editingController,
+          textController: widget.textController,
           textFieldViewportKey: _textFieldViewportKey,
           selectableTextKey: widget.selectableTextKey,
           textFieldLayerLink: widget.textFieldLayerLink,
           textContentOffsetLink: _textContentOffsetLink,
           interactorKey: widget.scrollKey,
           selection: widget.textController.selection,
-          showToolbar: _showToolbar,
-          showMagnifier: _showMagnifier,
           handleDragMode: _handleDragMode,
-          draggingHandleLink: _draggingHandleLink,
           handleColor: widget.handleColor,
           showDebugPaint: widget.showDebugPaint,
           onBaseHandleDragStart: _onBaseHandleDragStart,
@@ -327,9 +315,7 @@ class IOSTextfieldInteractorState extends State<IOSTextfieldInteractor> with Tic
     // When the user drags, the toolbar should not be visible.
     // A drag can begin with a tap down, so we hide the toolbar
     // preemptively.
-    setState(() {
-      _showToolbar = false;
-    });
+    widget.editingController.hideToolbar();
 
     _selectionBeforeSingleTapDown = widget.textController.selection;
 
@@ -368,15 +354,11 @@ class IOSTextfieldInteractorState extends State<IOSTextfieldInteractor> with Tic
     if (didTapOnExistingSelection) {
       // Toggle the toolbar display when the user taps on the collapsed caret,
       // or on top of an existing selection.
-      setState(() {
-        _showToolbar = !_showToolbar;
-      });
+      widget.editingController.toggleToolbar();
     } else {
       // The user tapped somewhere in the text outside any existing selection.
       // Hide the toolbar.
-      setState(() {
-        _showToolbar = false;
-      });
+      widget.editingController.hideToolbar();
     }
   }
 
@@ -387,9 +369,7 @@ class IOSTextfieldInteractorState extends State<IOSTextfieldInteractor> with Tic
     // When the user released the first tap, the toolbar was set
     // to visible. At the beginning of a double-tap, make it invisible
     // again.
-    setState(() {
-      _showToolbar = false;
-    });
+    widget.editingController.hideToolbar();
 
     final tapTextPosition = _getTextPositionAtOffset(details.localPosition);
     if (tapTextPosition != null) {
@@ -399,7 +379,7 @@ class IOSTextfieldInteractorState extends State<IOSTextfieldInteractor> with Tic
         widget.textController.selection = wordSelection;
 
         if (!wordSelection.isCollapsed) {
-          _showToolbar = true;
+          widget.editingController.showToolbar();
         }
       });
     }
@@ -416,8 +396,8 @@ class IOSTextfieldInteractorState extends State<IOSTextfieldInteractor> with Tic
     print('_onTextPanStart()');
     setState(() {
       _handleDragMode = HandleDragMode.collapsed;
+      _globalDragOffset = details.globalPosition;
       _dragOffset = details.localPosition;
-      _startDragScrollOffset = widget.scrollKey.currentState!.scrollOffset;
     });
   }
 
@@ -427,10 +407,10 @@ class IOSTextfieldInteractorState extends State<IOSTextfieldInteractor> with Tic
     _autoScrollIfNearBoundary(details.globalPosition);
 
     setState(() {
-      _showToolbar = false;
+      widget.editingController.hideToolbar();
       _handleDragMode = HandleDragMode.base;
-      _startDragScrollOffset = widget.scrollKey.currentState!.scrollOffset;
-      _dragOffset = (context.findRenderObject() as RenderBox).globalToLocal(details.globalPosition);
+      _globalDragOffset = details.globalPosition;
+      _dragOffset = details.globalPosition;
     });
   }
 
@@ -440,10 +420,10 @@ class IOSTextfieldInteractorState extends State<IOSTextfieldInteractor> with Tic
     _autoScrollIfNearBoundary(details.globalPosition);
 
     setState(() {
-      _showToolbar = false;
+      widget.editingController.hideToolbar();
       _handleDragMode = HandleDragMode.extent;
-      _startDragScrollOffset = widget.scrollKey.currentState!.scrollOffset;
-      _dragOffset = (context.findRenderObject() as RenderBox).globalToLocal(details.globalPosition);
+      _globalDragOffset = details.globalPosition;
+      _dragOffset = details.globalPosition;
     });
   }
 
@@ -472,8 +452,9 @@ class IOSTextfieldInteractorState extends State<IOSTextfieldInteractor> with Tic
     _autoScrollIfNearBoundary(details.globalPosition);
 
     setState(() {
+      _globalDragOffset = _globalDragOffset! + details.delta;
       _dragOffset = _dragOffset! + details.delta;
-      _showMagnifier = true;
+      widget.editingController.showMagnifier(_globalDragOffset!);
     });
   }
 
@@ -512,10 +493,10 @@ class IOSTextfieldInteractorState extends State<IOSTextfieldInteractor> with Tic
 
     setState(() {
       _handleDragMode = null;
-      _showMagnifier = false;
+      widget.editingController.hideMagnifier();
 
       if (!widget.textController.selection.isCollapsed) {
-        _showToolbar = true;
+        widget.editingController.showToolbar();
       }
     });
   }
@@ -1014,7 +995,7 @@ class IOSTextfieldInteractorState extends State<IOSTextfieldInteractor> with Tic
   ///
   /// The extent widget is tracked via [_draggingHandleLink]
   Widget _buildExtentTrackerForMagnifier() {
-    if (_handleDragMode == null) {
+    if (_handleDragMode != HandleDragMode.collapsed) {
       return const SizedBox();
     }
 
@@ -1022,7 +1003,7 @@ class IOSTextfieldInteractorState extends State<IOSTextfieldInteractor> with Tic
       left: _dragOffset!.dx,
       top: _dragOffset!.dy,
       child: CompositedTransformTarget(
-        link: _draggingHandleLink,
+        link: widget.editingController.magnifierFocalPoint,
         child: widget.showDebugPaint
             ? FractionalTranslation(
                 translation: const Offset(-0.5, -0.5),

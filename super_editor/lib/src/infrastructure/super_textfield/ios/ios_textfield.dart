@@ -5,7 +5,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:super_editor/src/default_editor/super_editor.dart';
 import 'package:super_editor/src/infrastructure/_listenable_builder.dart';
-import 'package:super_editor/src/infrastructure/attributed_spans.dart';
+import 'package:super_editor/src/infrastructure/super_textfield/ios/_editing_controls.dart';
 
 import '../../attributed_text.dart';
 import '../../super_selectable_text.dart';
@@ -75,6 +75,9 @@ class _SuperIOSTextfieldState extends State<SuperIOSTextfield> implements TextIn
   late FloatingCursorController _floatingCursorController;
   TextInputConnection? _textInputConnection;
 
+  final _magnifierLayerLink = LayerLink();
+  late IOSEditingOverlayController _editingOverlayController;
+
   bool _needViewportHeight = true;
   double? _viewportHeight;
   ScrollController _scrollController = ScrollController(); // TODO: allow ScrollController in widget
@@ -90,6 +93,8 @@ class _SuperIOSTextfieldState extends State<SuperIOSTextfield> implements TextIn
       ..addListener(_sendEditingValueToPlatform);
 
     _floatingCursorController = FloatingCursorController(textController: _textEditingController);
+
+    _editingOverlayController = IOSEditingOverlayController(magnifierFocalPoint: _magnifierLayerLink);
   }
 
   @override
@@ -318,6 +323,7 @@ class _SuperIOSTextfieldState extends State<SuperIOSTextfield> implements TextIn
           scrollKey: _scrollKey,
           textFieldLayerLink: _textFieldLayerLink,
           textController: _textEditingController,
+          editingController: _editingOverlayController,
           scrollController: _scrollController,
           viewportHeight: _viewportHeight,
           isMultiline: _isMultiline,
@@ -327,14 +333,7 @@ class _SuperIOSTextfieldState extends State<SuperIOSTextfield> implements TextIn
             listenable: _textEditingController,
             builder: (context) {
               final textSpan = _textEditingController.text.text.isNotEmpty
-                  ? _textEditingController.text.computeTextSpan((attributions) {
-                      final style = widget.textStyleBuilder(attributions);
-                      return attributions.contains(AutoCorrectAttribution())
-                          ? style.copyWith(
-                              decoration: TextDecoration.underline,
-                            )
-                          : style;
-                    })
+                  ? _textEditingController.text.computeTextSpan(widget.textStyleBuilder)
                   : AttributedText(text: 'enter text').computeTextSpan(
                       (attributions) => widget.textStyleBuilder(attributions).copyWith(color: Colors.grey));
 
@@ -342,6 +341,10 @@ class _SuperIOSTextfieldState extends State<SuperIOSTextfield> implements TextIn
                 padding: widget.padding,
                 child: Stack(
                   children: [
+                    // TODO: switch out textSelectionDecoration and textCaretFactory
+                    //       for backgroundBuilders and foregroundBuilders, respectively
+                    //
+                    //       add the floating cursor as a foreground builder
                     SuperSelectableText(
                       key: _textKey,
                       textSpan: textSpan,
@@ -371,21 +374,4 @@ class _SuperIOSTextfieldState extends State<SuperIOSTextfield> implements TextIn
       ),
     );
   }
-}
-
-class AutoCorrectAttribution extends Attribution {
-  @override
-  String get id => 'AutoCorrect';
-
-  @override
-  bool canMergeWith(Attribution other) {
-    return other is AutoCorrectAttribution;
-  }
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) || other is AutoCorrectAttribution && runtimeType == other.runtimeType;
-
-  @override
-  int get hashCode => 0;
 }
