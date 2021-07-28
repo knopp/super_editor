@@ -8,73 +8,48 @@ import 'package:super_editor/src/infrastructure/super_textfield/super_textfield.
 import '_handles.dart';
 import '_magnifier.dart';
 import '_toolbar.dart';
-import '_user_interaction.dart';
 
-// TODO: collaborating controllers:
-//  - AttributedTextEditingController
-//  - TextLayout
-//  - IOSEditingOverlayController
-//  - IOSTextFieldScrollController
-
-// Examples:
-// Autoscrolling:
-//  - scrollController.autoScrollIfDesired(referenceContext, offset)
-//  - scrollController.stopAutoScrolling()
-//
-// Show magnifier:
-//  - overlayController.showMagnifier(globalOffset)
-
-/// Editing controls for an iOS-style text field.
+/// Overlay editing controls for an iOS-style text field.
 ///
 /// [IOSEditingControls] is intended to be displayed in the app's
 /// [Overlay] so that its controls appear on top of everything else
 /// in the app.
 ///
-/// When [showToolbar] is `true`, displays an iOS-style toolbar with
-/// buttons for various action like cut, copy, paste, etc.
-///
-/// When [showMagnifier] is `true`, displays an iOS-style magnifying
-/// glass that magnifies the content beneath the user's finger.
-///
-/// When [selection] is expanded, displays iOS-style selection handles
-/// on either side of the selection. When the user drags either of the
-/// selection handles, [onBaseHandleDragStart], [onExtentHandleDragStart],
-/// [onPanUpdate], [onPanEnd], and [onPanCancel] are invoked, respectively.
+/// The given [IOSEditingOverlayController] controls the presentation
+/// of [IOSEditingControls]. Use the controller to show/hide the
+/// iOS-style toolbar, magnifier, and expanded selection handles.
 class IOSEditingControls extends StatefulWidget {
   const IOSEditingControls({
     Key? key,
     required this.editingController,
-    required this.textController,
-    required this.textFieldViewportKey,
-    required this.selectableTextKey,
+    required this.textFieldKey,
+    required this.textContentKey,
     required this.textFieldLayerLink,
-    required this.textContentOffsetLink,
-    required this.interactorKey,
+    required this.textContentLayerLink,
     required this.handleColor,
     this.showDebugPaint = false,
   }) : super(key: key);
 
+  /// Controller that determines whether the toolbar,
+  /// magnifier, and/or selection handles are visible in
+  /// this [IOSEditingControls].
   final IOSEditingOverlayController editingController;
-
-  final AttributedTextEditingController textController;
-
-  /// [GlobalKey] that references to the text field's viewport.
-  final GlobalKey textFieldViewportKey;
 
   /// [LayerLink] that is anchored to the text field's boundary.
   final LayerLink textFieldLayerLink;
 
+  /// [GlobalKey] that references the overall text field, i.e.,
+  /// the viewport that contains text that's (possibly) larger
+  /// than the visible area.
+  final GlobalKey textFieldKey;
+
   /// [LayerLink] that is anchored to the (possibly scrolling) content
   /// within the text field.
-  final LayerLink textContentOffsetLink;
+  final LayerLink textContentLayerLink;
 
   /// [GlobalKey] that references the [SuperSelectableTextState] within
   /// the text field.
-  final GlobalKey<SuperSelectableTextState> selectableTextKey;
-
-  /// [GlobalKey] that references the [IOSTextFieldInteractorState] within
-  /// the text field.
-  final GlobalKey<IOSTextfieldInteractorState> interactorKey;
+  final GlobalKey<SuperSelectableTextState> textContentKey;
 
   /// The color of the selection handles.
   final Color handleColor;
@@ -146,15 +121,15 @@ class _IOSEditingControlsState extends State<IOSEditingControls> {
   }
 
   void _onPanUpdate(DragUpdateDetails details) {
-    final textBox = (widget.selectableTextKey.currentContext!.findRenderObject() as RenderBox);
+    final textBox = (widget.textContentKey.currentContext!.findRenderObject() as RenderBox);
     final localOffset = textBox.globalToLocal(details.globalPosition);
-    final textLayout = widget.selectableTextKey.currentState!;
+    final textLayout = widget.textContentKey.currentState!;
     if (_isDraggingBase) {
-      widget.textController.selection = widget.textController.selection.copyWith(
+      widget.editingController.textController.selection = widget.editingController.textController.selection.copyWith(
         baseOffset: textLayout.getPositionNearestToOffset(localOffset).offset,
       );
     } else if (_isDraggingExtent) {
-      widget.textController.selection = widget.textController.selection.copyWith(
+      widget.editingController.textController.selection = widget.editingController.textController.selection.copyWith(
         extentOffset: textLayout.getPositionNearestToOffset(localOffset).offset,
       );
     }
@@ -187,10 +162,23 @@ class _IOSEditingControlsState extends State<IOSEditingControls> {
       _isDraggingExtent = false;
       widget.editingController.hideMagnifier();
 
-      if (!widget.textController.selection.isCollapsed) {
+      if (!widget.editingController.textController.selection.isCollapsed) {
         widget.editingController.showToolbar();
       }
     });
+  }
+
+  Offset _textPositionToViewportOffset(TextPosition position) {
+    final textOffset = widget.textContentKey.currentState!.getOffsetAtPosition(position);
+    final globalOffset =
+        (widget.textContentKey.currentContext!.findRenderObject() as RenderBox).localToGlobal(textOffset);
+    return (widget.textFieldKey.currentContext!.findRenderObject() as RenderBox).globalToLocal(globalOffset);
+  }
+
+  Offset _textOffsetToViewportOffset(Offset textOffset) {
+    final globalOffset =
+        (widget.textContentKey.currentContext!.findRenderObject() as RenderBox).localToGlobal(textOffset);
+    return (widget.textFieldKey.currentContext!.findRenderObject() as RenderBox).globalToLocal(globalOffset);
   }
 
   @override
@@ -206,10 +194,10 @@ class _IOSEditingControlsState extends State<IOSEditingControls> {
     return MultiListenableBuilder(
         listenables: {
           widget.editingController,
-          widget.textController,
+          widget.editingController.textController,
         },
         builder: (context) {
-          print('Building overlay controls. Selection: ${widget.textController.selection}');
+          print('Building overlay controls. Selection: ${widget.editingController.textController.selection}');
           return Stack(
             children: [
               // Build the base and extent draggable handles
@@ -226,7 +214,7 @@ class _IOSEditingControlsState extends State<IOSEditingControls> {
   }
 
   Widget _buildToolbar() {
-    if (widget.textController.selection.extentOffset < 0) {
+    if (widget.editingController.textController.selection.extentOffset < 0) {
       return const SizedBox();
     }
 
@@ -238,34 +226,29 @@ class _IOSEditingControlsState extends State<IOSEditingControls> {
     Offset toolbarTopAnchor;
     Offset toolbarBottomAnchor;
 
-    if (widget.textController.selection.isCollapsed) {
-      final extentOffsetInText =
-          widget.selectableTextKey.currentState!.getOffsetAtPosition(widget.textController.selection.extent);
-      print('Extent offset in text: $extentOffsetInText');
-      final extentOffsetInViewport = widget.interactorKey.currentState!.textOffsetToViewportOffset(extentOffsetInText);
+    if (widget.editingController.textController.selection.isCollapsed) {
+      final extentOffsetInViewport =
+          _textPositionToViewportOffset(widget.editingController.textController.selection.extent);
       print('Extent offset in viewport: $extentOffsetInViewport');
-      final lineHeight =
-          widget.selectableTextKey.currentState!.getLineHeightAtPosition(widget.textController.selection.extent);
+      final lineHeight = widget.textContentKey.currentState!
+          .getLineHeightAtPosition(widget.editingController.textController.selection.extent);
 
       toolbarTopAnchor = extentOffsetInViewport - const Offset(0, toolbarGap);
       toolbarBottomAnchor = extentOffsetInViewport + Offset(0, lineHeight) + const Offset(0, toolbarGap);
       print('Collapsed top anchor offset in viewport: $toolbarTopAnchor');
     } else {
       final selectionBoxes =
-          widget.selectableTextKey.currentState!.getBoxesForSelection(widget.textController.selection);
+          widget.textContentKey.currentState!.getBoxesForSelection(widget.editingController.textController.selection);
       Rect selectionBounds = selectionBoxes.first.toRect();
       for (int i = 1; i < selectionBoxes.length; ++i) {
         selectionBounds = selectionBounds.expandToInclude(selectionBoxes[i].toRect());
       }
       final selectionTopInText = selectionBounds.topCenter;
-      print('Selection top in text: $selectionTopInText');
-      final selectionTopInViewport = widget.interactorKey.currentState!.textOffsetToViewportOffset(selectionTopInText);
-      print('Selection top in viewport: $selectionTopInViewport');
+      final selectionTopInViewport = _textOffsetToViewportOffset(selectionTopInText);
       toolbarTopAnchor = selectionTopInViewport - const Offset(0, toolbarGap);
 
       final selectionBottomInText = selectionBounds.bottomCenter;
-      final selectionBottomInViewport =
-          widget.interactorKey.currentState!.textOffsetToViewportOffset(selectionBottomInText);
+      final selectionBottomInViewport = _textOffsetToViewportOffset(selectionBottomInText);
       toolbarBottomAnchor = selectionBottomInViewport + const Offset(0, toolbarGap);
     }
 
@@ -283,7 +266,7 @@ class _IOSEditingControlsState extends State<IOSEditingControls> {
     // The selection might end below the visible area in a scrollable
     // text field. In that case, we don't want the toolbar to sit more
     // than [toolbarGap] below the text field.
-    final viewportHeight = (widget.textFieldViewportKey.currentContext!.findRenderObject() as RenderBox).size.height;
+    final viewportHeight = (widget.textFieldKey.currentContext!.findRenderObject() as RenderBox).size.height;
     toolbarTopAnchor = Offset(
       toolbarTopAnchor.dx,
       min(
@@ -295,7 +278,7 @@ class _IOSEditingControlsState extends State<IOSEditingControls> {
     print('Adjusted top anchor: $toolbarTopAnchor');
 
     final textFieldGlobalOffset =
-        (widget.textFieldViewportKey.currentContext!.findRenderObject() as RenderBox).localToGlobal(Offset.zero);
+        (widget.textFieldKey.currentContext!.findRenderObject() as RenderBox).localToGlobal(Offset.zero);
 
     return Stack(
       children: [
@@ -342,36 +325,28 @@ class _IOSEditingControlsState extends State<IOSEditingControls> {
   }
 
   List<Widget> _buildDraggableOverlayHandles() {
-    if (widget.textController.selection.extentOffset < 0) {
+    if (widget.editingController.textController.selection.extentOffset < 0) {
       print('No extent -> no drag handles');
       // There is no selection. Draw nothing.
       return [];
     }
 
-    if (widget.textController.selection.isCollapsed && !_isDraggingBase && !_isDraggingExtent) {
+    if (widget.editingController.textController.selection.isCollapsed && !_isDraggingBase && !_isDraggingExtent) {
       print('No handle drag mode -> no drag handles');
       // iOS does not display a drag handle when the selection is collapsed.
       return [];
     }
 
     // The selection is expanded. Draw 2 drag handles.
-    final baseCaretOffsetInSelectableText =
-        widget.selectableTextKey.currentState!.getOffsetAtPosition(widget.textController.selection.base);
-    final baseCaretGlobalOffset = (widget.selectableTextKey.currentContext!.findRenderObject() as RenderBox)
-        .localToGlobal(baseCaretOffsetInSelectableText);
-    final baseCaretOffsetInViewport = (widget.textFieldViewportKey.currentContext!.findRenderObject() as RenderBox)
-        .globalToLocal(baseCaretGlobalOffset);
-    final baseLineHeight =
-        widget.selectableTextKey.currentState!.getLineHeightAtPosition(widget.textController.selection.base);
+    final baseCaretOffsetInViewport =
+        _textPositionToViewportOffset(widget.editingController.textController.selection.base);
+    final baseLineHeight = widget.textContentKey.currentState!
+        .getLineHeightAtPosition(widget.editingController.textController.selection.base);
 
-    final extentCaretOffsetInSelectableText =
-        widget.selectableTextKey.currentState!.getOffsetAtPosition(widget.textController.selection.extent);
-    final extentCaretGlobalOffset = (widget.selectableTextKey.currentContext!.findRenderObject() as RenderBox)
-        .localToGlobal(extentCaretOffsetInSelectableText);
-    final extentCaretOffsetInViewport = (widget.textFieldViewportKey.currentContext!.findRenderObject() as RenderBox)
-        .globalToLocal(extentCaretGlobalOffset);
-    final extentLineHeight =
-        widget.selectableTextKey.currentState!.getLineHeightAtPosition(widget.textController.selection.extent);
+    final extentCaretOffsetInViewport =
+        _textPositionToViewportOffset(widget.editingController.textController.selection.extent);
+    final extentLineHeight = widget.textContentKey.currentState!
+        .getLineHeightAtPosition(widget.editingController.textController.selection.extent);
 
     if (baseLineHeight == 0 || extentLineHeight == 0) {
       print('No height info -> no drag handles');
@@ -382,10 +357,10 @@ class _IOSEditingControlsState extends State<IOSEditingControls> {
     }
 
     // TODO: handle the case with no text affinity and then query widget.selection!.affinity
-    final selectionDirection =
-        widget.textController.selection.extentOffset >= widget.textController.selection.baseOffset
-            ? TextAffinity.downstream
-            : TextAffinity.upstream;
+    final selectionDirection = widget.editingController.textController.selection.extentOffset >=
+            widget.editingController.textController.selection.baseOffset
+        ? TextAffinity.downstream
+        : TextAffinity.upstream;
 
     // TODO: handle RTL text orientation
     final upstreamCaretOffset =
@@ -403,8 +378,8 @@ class _IOSEditingControlsState extends State<IOSEditingControls> {
     //       visible area.
     bool showBaseHandle = false;
     bool showExtentHandle = false;
-    if (widget.textContentOffsetLink.leader != null) {
-      final textFieldBox = widget.textFieldViewportKey.currentContext!.findRenderObject() as RenderBox;
+    if (widget.textContentLayerLink.leader != null) {
+      final textFieldBox = widget.textFieldKey.currentContext!.findRenderObject() as RenderBox;
       final textFieldRect = Offset.zero & textFieldBox.size;
 
       const estimatedHandleVisualSize = Size(24, 24);
@@ -417,63 +392,58 @@ class _IOSEditingControlsState extends State<IOSEditingControls> {
       showExtentHandle = _isDraggingExtent || textFieldRect.overlaps(estimatedExtentHandleRect);
     }
 
-    if (!showExtentHandle) {
-      print('Hiding extent handle');
-    }
-
     return [
-      if (showBaseHandle) ...[
+      if (showBaseHandle)
         // Left-bounding handle touch target
-        CompositedTransformFollower(
-          key: _upstreamHandleKey,
-          link: widget.textContentOffsetLink,
-          offset: Offset(upstreamCaretOffset.dx, upstreamCaretOffset.dy),
-          child: Transform.translate(
-            offset: const Offset(-12, -5),
-            child: GestureDetector(
-              behavior: HitTestBehavior.translucent,
-              onPanStart: selectionDirection == TextAffinity.downstream ? _onBasePanStart : _onExtentPanStart,
-              onPanUpdate: _onPanUpdate,
-              onPanEnd: _onPanEnd,
-              onPanCancel: _onPanCancel,
-              child: Container(
-                width: 24,
-                color: widget.showDebugPaint ? Colors.green : Colors.transparent,
-                child: IOSTextFieldHandle.upstream(
-                  color: widget.handleColor,
-                  caretHeight: baseLineHeight,
-                ),
-              ),
-            ),
-          ),
+        _buildHandle(
+          handleKey: _upstreamHandleKey,
+          followerOffset: Offset(upstreamCaretOffset.dx, upstreamCaretOffset.dy),
+          onPanStart: selectionDirection == TextAffinity.downstream ? _onBasePanStart : _onExtentPanStart,
+          debugColor: Colors.green,
+          baseLineHeight: baseLineHeight,
         ),
-      ],
-      if (showExtentHandle) ...[
-        // Left-bounding handle touch target
-        CompositedTransformFollower(
-          key: _downstreamHandleKey,
-          link: widget.textContentOffsetLink,
-          offset: Offset(downstreamCaretOffset.dx, downstreamCaretOffset.dy),
-          child: Transform.translate(
-            offset: const Offset(-12, -5),
-            child: GestureDetector(
-              onPanStart: selectionDirection == TextAffinity.downstream ? _onExtentPanStart : _onBasePanStart,
-              onPanUpdate: _onPanUpdate,
-              onPanEnd: _onPanEnd,
-              onPanCancel: _onPanCancel,
-              child: Container(
-                width: 24,
-                color: widget.showDebugPaint ? Colors.red : Colors.transparent,
-                child: IOSTextFieldHandle.downstream(
-                  color: widget.handleColor,
-                  caretHeight: extentLineHeight,
-                ),
-              ),
-            ),
-          ),
+      if (showExtentHandle)
+        // right-bounding handle touch target
+        _buildHandle(
+          handleKey: _downstreamHandleKey,
+          followerOffset: Offset(downstreamCaretOffset.dx, downstreamCaretOffset.dy),
+          onPanStart: selectionDirection == TextAffinity.downstream ? _onExtentPanStart : _onBasePanStart,
+          debugColor: Colors.red,
+          baseLineHeight: baseLineHeight,
         ),
-      ],
     ];
+  }
+
+  Widget _buildHandle({
+    required Key handleKey,
+    required Offset followerOffset,
+    required void Function(DragStartDetails) onPanStart,
+    required double baseLineHeight,
+    required Color debugColor,
+  }) {
+    return CompositedTransformFollower(
+      key: handleKey,
+      link: widget.textContentLayerLink,
+      offset: followerOffset,
+      child: Transform.translate(
+        offset: const Offset(-12, -5),
+        child: GestureDetector(
+          behavior: HitTestBehavior.translucent,
+          onPanStart: onPanStart,
+          onPanUpdate: _onPanUpdate,
+          onPanEnd: _onPanEnd,
+          onPanCancel: _onPanCancel,
+          child: Container(
+            width: 24,
+            color: widget.showDebugPaint ? Colors.green : Colors.transparent,
+            child: IOSTextFieldHandle.upstream(
+              color: widget.handleColor,
+              caretHeight: baseLineHeight,
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   Widget _buildMagnifierFocalPoint() {
@@ -524,11 +494,23 @@ class _IOSEditingControlsState extends State<IOSEditingControls> {
 
 class IOSEditingOverlayController with ChangeNotifier {
   IOSEditingOverlayController({
+    required this.textController,
     required LayerLink magnifierFocalPoint,
   }) : _magnifierFocalPoint = magnifierFocalPoint;
 
   bool _isToolbarVisible = false;
   bool get isToolbarVisible => _isToolbarVisible;
+
+  /// The [AttributedTextEditingController] controlling the text
+  /// and selection within the text field with which this
+  /// [IOSEditingOverlayController] is associated.
+  ///
+  /// The purpose of an [IOSEditingOverlayController] is to control
+  /// the presentation of UI controls related to text editing. These
+  /// controls don't make sense without some underlying text and
+  /// selection. Those properties and behaviors are represented by
+  /// this [textController].
+  final AttributedTextEditingController textController;
 
   void toggleToolbar() {
     if (isToolbarVisible) {
@@ -554,23 +536,19 @@ class IOSEditingOverlayController with ChangeNotifier {
   final LayerLink _magnifierFocalPoint;
   LayerLink get magnifierFocalPoint => _magnifierFocalPoint;
 
-  // Offset? _magnifierFocalPoint;
   bool _isMagnifierVisible = false;
   bool get isMagnifierVisible => _isMagnifierVisible;
-  // Offset? get magnifierFocalPoint => _magnifierFocalPoint;
 
   void showMagnifier(Offset globalOffset) {
     hideToolbar();
 
     _isMagnifierVisible = true;
-    // _magnifierFocalPoint = globalOffset;
 
     notifyListeners();
   }
 
   void hideMagnifier() {
     _isMagnifierVisible = false;
-    // _magnifierFocalPoint = null;
     notifyListeners();
   }
 

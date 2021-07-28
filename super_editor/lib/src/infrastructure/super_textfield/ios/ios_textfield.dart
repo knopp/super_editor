@@ -66,9 +66,9 @@ class SuperIOSTextfield extends StatefulWidget {
 class _SuperIOSTextfieldState extends State<SuperIOSTextfield> implements TextInputClient {
   final _textFieldKey = GlobalKey();
   final _textFieldLayerLink = LayerLink();
-  final _textContentOffsetLink = LayerLink();
+  final _textContentLayerLink = LayerLink();
   final _scrollKey = GlobalKey<IOSTextfieldInteractorState>();
-  final _textKey = GlobalKey<SuperSelectableTextState>();
+  final _textContentKey = GlobalKey<SuperSelectableTextState>();
 
   late FocusNode _focusNode;
 
@@ -103,9 +103,14 @@ class _SuperIOSTextfieldState extends State<SuperIOSTextfield> implements TextIn
 
     _scrollController.addListener(_onTextScrollChange);
 
-    _floatingCursorController = FloatingCursorController(textController: _textEditingController);
+    _floatingCursorController = FloatingCursorController(
+      textController: _textEditingController,
+    );
 
-    _editingOverlayController = IOSEditingOverlayController(magnifierFocalPoint: _magnifierLayerLink);
+    _editingOverlayController = IOSEditingOverlayController(
+      textController: _textEditingController,
+      magnifierFocalPoint: _magnifierLayerLink,
+    );
   }
 
   @override
@@ -231,11 +236,9 @@ class _SuperIOSTextfieldState extends State<SuperIOSTextfield> implements TextIn
         return IOSEditingControls(
           editingController: _editingOverlayController,
           textFieldLayerLink: _textFieldLayerLink,
-          interactorKey: _scrollKey,
-          textFieldViewportKey: _textFieldKey,
-          textContentOffsetLink: _textContentOffsetLink,
-          selectableTextKey: _textKey,
-          textController: _textEditingController,
+          textFieldKey: _textFieldKey,
+          textContentLayerLink: _textContentLayerLink,
+          textContentKey: _textContentKey,
           handleColor: widget.controlsColor,
           showDebugPaint: widget.showDebugPaint,
         );
@@ -317,7 +320,7 @@ class _SuperIOSTextfieldState extends State<SuperIOSTextfield> implements TextIn
 
   @override
   void updateFloatingCursor(RawFloatingCursorPoint point) {
-    _floatingCursorController.updateFloatingCursor(_textKey.currentState!, point);
+    _floatingCursorController.updateFloatingCursor(_textContentKey.currentState!, point);
   }
 
   @override
@@ -358,12 +361,12 @@ class _SuperIOSTextfieldState extends State<SuperIOSTextfield> implements TextIn
       return 0;
     }
 
-    if (_textKey.currentState == null) {
+    if (_textContentKey.currentState == null) {
       return 0;
     }
 
-    final offsetAtEndOfText =
-        _textKey.currentState!.getOffsetAtPosition(TextPosition(offset: _textEditingController.text.text.length));
+    final offsetAtEndOfText = _textContentKey.currentState!
+        .getOffsetAtPosition(TextPosition(offset: _textEditingController.text.text.length));
     int lineCount = (offsetAtEndOfText.dy / _getEstimatedLineHeight()).ceil();
 
     if (_textEditingController.text.text.endsWith('\n')) {
@@ -380,7 +383,7 @@ class _SuperIOSTextfieldState extends State<SuperIOSTextfield> implements TextIn
 
   @override
   Widget build(BuildContext context) {
-    if (_textKey.currentContext == null || _needViewportHeight) {
+    if (_textContentKey.currentContext == null || _needViewportHeight) {
       // The text hasn't been laid out yet, which means our calculations
       // for text height is probably wrong. Schedule a post frame callback
       // to re-calculate the height after initial layout.
@@ -401,7 +404,7 @@ class _SuperIOSTextfieldState extends State<SuperIOSTextfield> implements TextIn
         child: IOSTextfieldInteractor(
           key: _scrollKey,
           focusNode: _focusNode,
-          selectableTextKey: _textKey,
+          selectableTextKey: _textContentKey,
           scrollKey: _scrollKey,
           textFieldLayerLink: _textFieldLayerLink,
           textController: _textEditingController,
@@ -420,7 +423,7 @@ class _SuperIOSTextfieldState extends State<SuperIOSTextfield> implements TextIn
                       (attributions) => widget.textStyleBuilder(attributions).copyWith(color: Colors.grey));
 
               return CompositedTransformTarget(
-                link: _textContentOffsetLink,
+                link: _textContentLayerLink,
                 child: Padding(
                   padding: widget.padding,
                   child: Stack(
@@ -430,7 +433,7 @@ class _SuperIOSTextfieldState extends State<SuperIOSTextfield> implements TextIn
                       //
                       //       add the floating cursor as a foreground builder
                       SuperSelectableText(
-                        key: _textKey,
+                        key: _textContentKey,
                         textSpan: textSpan,
                         textSelection: _textEditingController.selection,
                         textSelectionDecoration: TextSelectionDecoration(selectionColor: widget.selectionColor),
