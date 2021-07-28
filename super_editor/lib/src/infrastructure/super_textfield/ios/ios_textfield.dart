@@ -66,6 +66,7 @@ class SuperIOSTextfield extends StatefulWidget {
 class _SuperIOSTextfieldState extends State<SuperIOSTextfield> implements TextInputClient {
   final _textFieldKey = GlobalKey();
   final _textFieldLayerLink = LayerLink();
+  final _textContentOffsetLink = LayerLink();
   final _scrollKey = GlobalKey<IOSTextfieldInteractorState>();
   final _textKey = GlobalKey<SuperSelectableTextState>();
 
@@ -80,7 +81,12 @@ class _SuperIOSTextfieldState extends State<SuperIOSTextfield> implements TextIn
 
   bool _needViewportHeight = true;
   double? _viewportHeight;
-  ScrollController _scrollController = ScrollController(); // TODO: allow ScrollController in widget
+  final ScrollController _scrollController = ScrollController();
+
+  // OverlayEntry that displays the toolbar and magnifier, and
+  // positions the invisible touch targets for base/extent
+  // dragging.
+  OverlayEntry? _controlsOverlayEntry;
 
   @override
   void initState() {
@@ -88,9 +94,14 @@ class _SuperIOSTextfieldState extends State<SuperIOSTextfield> implements TextIn
     _focusNode = (widget.focusNode ?? FocusNode())
       ..unfocus()
       ..addListener(_onFocusChange);
+    if (_focusNode.hasFocus) {
+      _showHandles();
+    }
 
     _textEditingController = (widget.textController ?? AttributedTextEditingController())
       ..addListener(_sendEditingValueToPlatform);
+
+    _scrollController.addListener(_onTextScrollChange);
 
     _floatingCursorController = FloatingCursorController(textController: _textEditingController);
 
@@ -132,14 +143,39 @@ class _SuperIOSTextfieldState extends State<SuperIOSTextfield> implements TextIn
       // Force a new viewport height calculation.
       _needViewportHeight = true;
     }
+
+    if (widget.showDebugPaint != oldWidget.showDebugPaint) {
+      WidgetsBinding.instance!.addPostFrameCallback((timeStamp) {
+        _rebuildHandles();
+      });
+    }
+  }
+
+  @override
+  void reassemble() {
+    super.reassemble();
+
+    // On Hot Reload we need to remove any visible overlay controls and then
+    // bring them back a frame later to avoid having the controls attempt
+    // to access the layout of the text. The text layout is not immediately
+    // available upon Hot Reload. Accessing it results in an exception.
+    _removeHandles();
+
+    WidgetsBinding.instance!.addPostFrameCallback((timeStamp) {
+      _showHandles();
+    });
   }
 
   @override
   void dispose() {
+    _removeHandles();
+
     _textEditingController.removeListener(_sendEditingValueToPlatform);
     if (widget.textController == null) {
       _textEditingController.dispose();
     }
+
+    _scrollController.removeListener(_onTextScrollChange);
 
     _focusNode.removeListener(_onFocusChange);
     if (widget.focusNode == null) {
@@ -166,6 +202,8 @@ class _SuperIOSTextfieldState extends State<SuperIOSTextfield> implements TextIn
           _textInputConnection!
             ..show()
             ..setEditingState(currentTextEditingValue!);
+
+          _showHandles();
         });
       }
     } else {
@@ -174,7 +212,51 @@ class _SuperIOSTextfieldState extends State<SuperIOSTextfield> implements TextIn
         _textInputConnection?.close();
         _textInputConnection = null;
         _textEditingController.selection = const TextSelection.collapsed(offset: -1);
+        _removeHandles();
       });
+    }
+  }
+
+  void _onTextScrollChange() {
+    if (_controlsOverlayEntry != null) {
+      _rebuildHandles();
+    }
+  }
+
+  /// Displays [IOSEditingControls] in the app's [Overlay], if not already
+  /// displayed.
+  void _showHandles() {
+    if (_controlsOverlayEntry == null) {
+      _controlsOverlayEntry = OverlayEntry(builder: (overlayContext) {
+        return IOSEditingControls(
+          editingController: _editingOverlayController,
+          textFieldLayerLink: _textFieldLayerLink,
+          interactorKey: _scrollKey,
+          textFieldViewportKey: _textFieldKey,
+          textContentOffsetLink: _textContentOffsetLink,
+          selectableTextKey: _textKey,
+          textController: _textEditingController,
+          handleColor: widget.controlsColor,
+          showDebugPaint: widget.showDebugPaint,
+        );
+      });
+
+      Overlay.of(context)!.insert(_controlsOverlayEntry!);
+    }
+  }
+
+  /// Rebuilds the [IOSEditingControls] in the app's [Overlay], if
+  /// they're currently displayed.
+  void _rebuildHandles() {
+    _controlsOverlayEntry?.markNeedsBuild();
+  }
+
+  /// Removes [IOSEditingControls] from the app's [Overlay], if they're
+  /// currently displayed.
+  void _removeHandles() {
+    if (_controlsOverlayEntry != null) {
+      _controlsOverlayEntry!.remove();
+      _controlsOverlayEntry = null;
     }
   }
 
@@ -337,35 +419,38 @@ class _SuperIOSTextfieldState extends State<SuperIOSTextfield> implements TextIn
                   : AttributedText(text: 'enter text').computeTextSpan(
                       (attributions) => widget.textStyleBuilder(attributions).copyWith(color: Colors.grey));
 
-              return Padding(
-                padding: widget.padding,
-                child: Stack(
-                  children: [
-                    // TODO: switch out textSelectionDecoration and textCaretFactory
-                    //       for backgroundBuilders and foregroundBuilders, respectively
-                    //
-                    //       add the floating cursor as a foreground builder
-                    SuperSelectableText(
-                      key: _textKey,
-                      textSpan: textSpan,
-                      textSelection: _textEditingController.selection,
-                      textSelectionDecoration: TextSelectionDecoration(selectionColor: widget.selectionColor),
-                      showCaret: true,
-                      textCaretFactory: IOSTextFieldCaretFactory(
-                        color: _floatingCursorController.isShowingFloatingCursor ? Colors.grey : widget.controlsColor,
-                        width: 2,
+              return CompositedTransformTarget(
+                link: _textContentOffsetLink,
+                child: Padding(
+                  padding: widget.padding,
+                  child: Stack(
+                    children: [
+                      // TODO: switch out textSelectionDecoration and textCaretFactory
+                      //       for backgroundBuilders and foregroundBuilders, respectively
+                      //
+                      //       add the floating cursor as a foreground builder
+                      SuperSelectableText(
+                        key: _textKey,
+                        textSpan: textSpan,
+                        textSelection: _textEditingController.selection,
+                        textSelectionDecoration: TextSelectionDecoration(selectionColor: widget.selectionColor),
+                        showCaret: true,
+                        textCaretFactory: IOSTextFieldCaretFactory(
+                          color: _floatingCursorController.isShowingFloatingCursor ? Colors.grey : widget.controlsColor,
+                          width: 2,
+                        ),
                       ),
-                    ),
-                    Positioned(
-                      left: 0,
-                      top: 0,
-                      right: 0,
-                      bottom: 0,
-                      child: IOSFloatingCursor(
-                        controller: _floatingCursorController,
+                      Positioned(
+                        left: 0,
+                        top: 0,
+                        right: 0,
+                        bottom: 0,
+                        child: IOSFloatingCursor(
+                          controller: _floatingCursorController,
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               );
             },

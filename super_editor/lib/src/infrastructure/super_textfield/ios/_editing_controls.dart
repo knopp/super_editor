@@ -50,15 +50,8 @@ class IOSEditingControls extends StatefulWidget {
     required this.textFieldLayerLink,
     required this.textContentOffsetLink,
     required this.interactorKey,
-    required this.selection,
-    required this.handleDragMode,
     required this.handleColor,
     this.showDebugPaint = false,
-    required this.onBaseHandleDragStart,
-    required this.onExtentHandleDragStart,
-    required this.onPanUpdate,
-    required this.onPanEnd,
-    required this.onPanCancel,
   }) : super(key: key);
 
   final IOSEditingOverlayController editingController;
@@ -83,32 +76,11 @@ class IOSEditingControls extends StatefulWidget {
   /// the text field.
   final GlobalKey<IOSTextfieldInteractorState> interactorKey;
 
-  /// The current text selection within the text field.
-  final TextSelection selection;
-
-  /// The type of handle that is currently being dragged.
-  final HandleDragMode? handleDragMode;
-
   /// The color of the selection handles.
   final Color handleColor;
 
   /// Whether to paint debug guides.
   final bool showDebugPaint;
-
-  /// Callback invoked when the user starts to drag the base selection handle.
-  final Function(DragStartDetails details) onBaseHandleDragStart;
-
-  /// Callback invoked when the user starts to drag the extent selection handle.
-  final Function(DragStartDetails details) onExtentHandleDragStart;
-
-  /// Callback invoked when the user drags either the base or extent handle.
-  final Function(DragUpdateDetails details) onPanUpdate;
-
-  /// Callback invoked when the user stops dragging either the base or extent handle.
-  final Function(DragEndDetails details) onPanEnd;
-
-  /// Callback invoked when a base or extend handle drag is cancelled.
-  final VoidCallback onPanCancel;
 
   @override
   _IOSEditingControlsState createState() => _IOSEditingControlsState();
@@ -141,50 +113,39 @@ class _IOSEditingControlsState extends State<IOSEditingControls> {
   }
 
   @override
-  void didUpdateWidget(IOSEditingControls oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    print('didUpdateWidget, handle mode: ${widget.handleDragMode}');
-  }
-
-  @override
   void dispose() {
     super.dispose();
   }
 
   void _onBasePanStart(DragStartDetails details) {
     print('_onBasePanStart');
-    _isDraggingBase = true;
-    _isDraggingExtent = false;
-    // widget.onBaseHandleDragStart(details);
 
-    // from user_interaction
-    // _autoScrollIfNearBoundary(details.globalPosition);
+    widget.editingController.hideToolbar();
+
+    // TODO: autoscroll if near boundary
 
     setState(() {
-      widget.editingController.hideToolbar();
+      _isDraggingBase = true;
+      _isDraggingExtent = false;
       _dragOffset = (context.findRenderObject() as RenderBox).globalToLocal(details.globalPosition);
     });
   }
 
   void _onExtentPanStart(DragStartDetails details) {
     print('_onExtentPanStart');
-    _isDraggingBase = false;
-    _isDraggingExtent = true;
-    // widget.onExtentHandleDragStart(details);
 
-    // from user_interaction
-    // _autoScrollIfNearBoundary(details.globalPosition);
+    widget.editingController.hideToolbar();
+
+    // TODO: autoscroll if near boundary
 
     setState(() {
-      widget.editingController.hideToolbar();
+      _isDraggingBase = false;
+      _isDraggingExtent = true;
       _dragOffset = (context.findRenderObject() as RenderBox).globalToLocal(details.globalPosition);
     });
   }
 
   void _onPanUpdate(DragUpdateDetails details) {
-    // widget.onPanUpdate(details);
-
-    // from user_interaction
     final textBox = (widget.selectableTextKey.currentContext!.findRenderObject() as RenderBox);
     final localOffset = textBox.globalToLocal(details.globalPosition);
     final textLayout = widget.selectableTextKey.currentState!;
@@ -198,7 +159,7 @@ class _IOSEditingControlsState extends State<IOSEditingControls> {
       );
     }
 
-    // _autoScrollIfNearBoundary(details.globalPosition);
+    // TODO: autoscroll if near boundary
 
     setState(() {
       _dragOffset = _dragOffset! + details.delta;
@@ -208,29 +169,18 @@ class _IOSEditingControlsState extends State<IOSEditingControls> {
 
   void _onPanEnd(DragEndDetails details) {
     print('_onPanEnd');
-    // widget.onPanEnd(details);
-
-    // from user_interaction
     _onHandleDragEnd();
   }
 
   void _onPanCancel() {
     print('_onPanCancel');
-    // widget.onPanCancel();
-
-    // from user_interaction
     _onHandleDragEnd();
   }
 
   void _onHandleDragEnd() {
     print('_onHandleDragEnd()');
-    // stopScrolling();
-    //
-    // if (_isDraggingBase) {
-    //   _ensureTextPositionIsVisible(widget.textController.selection.base)
-    // } else if (_isDraggingExtent) {
-    //   _ensureTextPositionIsVisible(widget.textController.selection.extent);
-    // }
+    // TODO: stop auto-scrolling
+    // TODO: ensure that extent is visible
 
     setState(() {
       _isDraggingBase = false;
@@ -259,6 +209,7 @@ class _IOSEditingControlsState extends State<IOSEditingControls> {
           widget.textController,
         },
         builder: (context) {
+          print('Building overlay controls. Selection: ${widget.textController.selection}');
           return Stack(
             children: [
               // Build the base and extent draggable handles
@@ -275,7 +226,7 @@ class _IOSEditingControlsState extends State<IOSEditingControls> {
   }
 
   Widget _buildToolbar() {
-    if (widget.selection.extentOffset < 0) {
+    if (widget.textController.selection.extentOffset < 0) {
       return const SizedBox();
     }
 
@@ -287,22 +238,29 @@ class _IOSEditingControlsState extends State<IOSEditingControls> {
     Offset toolbarTopAnchor;
     Offset toolbarBottomAnchor;
 
-    if (widget.selection.isCollapsed) {
-      final extentOffsetInText = widget.selectableTextKey.currentState!.getOffsetAtPosition(widget.selection.extent);
+    if (widget.textController.selection.isCollapsed) {
+      final extentOffsetInText =
+          widget.selectableTextKey.currentState!.getOffsetAtPosition(widget.textController.selection.extent);
+      print('Extent offset in text: $extentOffsetInText');
       final extentOffsetInViewport = widget.interactorKey.currentState!.textOffsetToViewportOffset(extentOffsetInText);
-      final lineHeight = widget.selectableTextKey.currentState!.getLineHeightAtPosition(widget.selection.extent);
+      print('Extent offset in viewport: $extentOffsetInViewport');
+      final lineHeight =
+          widget.selectableTextKey.currentState!.getLineHeightAtPosition(widget.textController.selection.extent);
 
       toolbarTopAnchor = extentOffsetInViewport - const Offset(0, toolbarGap);
       toolbarBottomAnchor = extentOffsetInViewport + Offset(0, lineHeight) + const Offset(0, toolbarGap);
       print('Collapsed top anchor offset in viewport: $toolbarTopAnchor');
     } else {
-      final selectionBoxes = widget.selectableTextKey.currentState!.getBoxesForSelection(widget.selection);
+      final selectionBoxes =
+          widget.selectableTextKey.currentState!.getBoxesForSelection(widget.textController.selection);
       Rect selectionBounds = selectionBoxes.first.toRect();
       for (int i = 1; i < selectionBoxes.length; ++i) {
         selectionBounds = selectionBounds.expandToInclude(selectionBoxes[i].toRect());
       }
       final selectionTopInText = selectionBounds.topCenter;
+      print('Selection top in text: $selectionTopInText');
       final selectionTopInViewport = widget.interactorKey.currentState!.textOffsetToViewportOffset(selectionTopInText);
+      print('Selection top in viewport: $selectionTopInViewport');
       toolbarTopAnchor = selectionTopInViewport - const Offset(0, toolbarGap);
 
       final selectionBottomInText = selectionBounds.bottomCenter;
@@ -384,13 +342,13 @@ class _IOSEditingControlsState extends State<IOSEditingControls> {
   }
 
   List<Widget> _buildDraggableOverlayHandles() {
-    if (widget.selection.extentOffset < 0) {
+    if (widget.textController.selection.extentOffset < 0) {
       print('No extent -> no drag handles');
       // There is no selection. Draw nothing.
       return [];
     }
 
-    if (widget.selection.isCollapsed && !_isDraggingBase && !_isDraggingExtent) {
+    if (widget.textController.selection.isCollapsed && !_isDraggingBase && !_isDraggingExtent) {
       print('No handle drag mode -> no drag handles');
       // iOS does not display a drag handle when the selection is collapsed.
       return [];
@@ -398,20 +356,22 @@ class _IOSEditingControlsState extends State<IOSEditingControls> {
 
     // The selection is expanded. Draw 2 drag handles.
     final baseCaretOffsetInSelectableText =
-        widget.selectableTextKey.currentState!.getOffsetAtPosition(widget.selection.base);
+        widget.selectableTextKey.currentState!.getOffsetAtPosition(widget.textController.selection.base);
     final baseCaretGlobalOffset = (widget.selectableTextKey.currentContext!.findRenderObject() as RenderBox)
         .localToGlobal(baseCaretOffsetInSelectableText);
     final baseCaretOffsetInViewport = (widget.textFieldViewportKey.currentContext!.findRenderObject() as RenderBox)
         .globalToLocal(baseCaretGlobalOffset);
-    final baseLineHeight = widget.selectableTextKey.currentState!.getLineHeightAtPosition(widget.selection.base);
+    final baseLineHeight =
+        widget.selectableTextKey.currentState!.getLineHeightAtPosition(widget.textController.selection.base);
 
     final extentCaretOffsetInSelectableText =
-        widget.selectableTextKey.currentState!.getOffsetAtPosition(widget.selection.extent);
+        widget.selectableTextKey.currentState!.getOffsetAtPosition(widget.textController.selection.extent);
     final extentCaretGlobalOffset = (widget.selectableTextKey.currentContext!.findRenderObject() as RenderBox)
         .localToGlobal(extentCaretOffsetInSelectableText);
     final extentCaretOffsetInViewport = (widget.textFieldViewportKey.currentContext!.findRenderObject() as RenderBox)
         .globalToLocal(extentCaretGlobalOffset);
-    final extentLineHeight = widget.selectableTextKey.currentState!.getLineHeightAtPosition(widget.selection.extent);
+    final extentLineHeight =
+        widget.selectableTextKey.currentState!.getLineHeightAtPosition(widget.textController.selection.extent);
 
     if (baseLineHeight == 0 || extentLineHeight == 0) {
       print('No height info -> no drag handles');
@@ -423,7 +383,9 @@ class _IOSEditingControlsState extends State<IOSEditingControls> {
 
     // TODO: handle the case with no text affinity and then query widget.selection!.affinity
     final selectionDirection =
-        widget.selection.extentOffset >= widget.selection.baseOffset ? TextAffinity.downstream : TextAffinity.upstream;
+        widget.textController.selection.extentOffset >= widget.textController.selection.baseOffset
+            ? TextAffinity.downstream
+            : TextAffinity.upstream;
 
     // TODO: handle RTL text orientation
     final upstreamCaretOffset =
@@ -451,12 +413,8 @@ class _IOSEditingControlsState extends State<IOSEditingControls> {
 
       final estimatedExtentHandleRect = downstreamCaretOffset & estimatedHandleVisualSize;
 
-      showBaseHandle = _isDraggingBase ||
-          widget.handleDragMode == HandleDragMode.base ||
-          textFieldRect.overlaps(estimatedBaseHandleRect);
-      showExtentHandle = _isDraggingExtent ||
-          widget.handleDragMode == HandleDragMode.extent ||
-          textFieldRect.overlaps(estimatedExtentHandleRect);
+      showBaseHandle = _isDraggingBase || textFieldRect.overlaps(estimatedBaseHandleRect);
+      showExtentHandle = _isDraggingExtent || textFieldRect.overlaps(estimatedExtentHandleRect);
     }
 
     if (!showExtentHandle) {

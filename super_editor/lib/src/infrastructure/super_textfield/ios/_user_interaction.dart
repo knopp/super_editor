@@ -157,23 +157,11 @@ class IOSTextfieldInteractorState extends State<IOSTextfieldInteractor> with Tic
 
   late Ticker _ticker;
 
-  // OverlayEntry that displays the toolbar and magnifier, and
-  // positions the invisible touch targets for base/extent
-  // dragging.
-  OverlayEntry? _controlsOverlayEntry;
-
   @override
   void initState() {
     super.initState();
 
     _ticker = createTicker(_onTick);
-
-    widget.focusNode.addListener(_onFocusChange);
-    if (widget.focusNode.hasFocus) {
-      _showHandles();
-    }
-
-    widget.textController.addListener(_onTextControllerChange);
 
     widget.scrollController.addListener(_onScrollChange);
   }
@@ -182,19 +170,9 @@ class IOSTextfieldInteractorState extends State<IOSTextfieldInteractor> with Tic
   void didUpdateWidget(IOSTextfieldInteractor oldWidget) {
     super.didUpdateWidget(oldWidget);
 
-    if (widget.focusNode != oldWidget.focusNode) {
-      oldWidget.focusNode.removeListener(_onFocusChange);
-      widget.focusNode.addListener(_onFocusChange);
-    }
-
     if (widget.scrollKey != oldWidget.scrollKey) {
       oldWidget.scrollKey.currentState?.removeScrollListener(_onScrollChange);
       widget.scrollKey.currentState!.addScrollListener(_onScrollChange);
-    }
-
-    if (widget.textController != oldWidget.textController) {
-      oldWidget.textController.removeListener(_onTextControllerChange);
-      widget.textController.addListener(_onTextControllerChange);
     }
 
     if (widget.viewportHeight != oldWidget.viewportHeight) {
@@ -211,29 +189,6 @@ class IOSTextfieldInteractorState extends State<IOSTextfieldInteractor> with Tic
       oldWidget.scrollController.removeListener(_onScrollChange);
       widget.scrollController.addListener(_onScrollChange);
     }
-
-    if (widget.showDebugPaint != oldWidget.showDebugPaint) {
-      WidgetsBinding.instance!.addPostFrameCallback((timeStamp) {
-        _rebuildHandles();
-      });
-    }
-  }
-
-  @override
-  void reassemble() {
-    super.reassemble();
-
-    // On Hot Reload we need to remove any visible overlay controls and then
-    // bring them back a frame later to avoid having the controls attempt
-    // to access the layout of the text. The text layout is not immediately
-    // available upon Hot Reload. Accessing it results in an exception.
-    if (_controlsOverlayEntry != null) {
-      _removeHandles();
-
-      WidgetsBinding.instance!.addPostFrameCallback((timeStamp) {
-        _showHandles();
-      });
-    }
   }
 
   @override
@@ -242,69 +197,7 @@ class IOSTextfieldInteractorState extends State<IOSTextfieldInteractor> with Tic
     _scrollChangeListeners.clear();
     _ticker.dispose();
     widget.scrollKey.currentState?.removeScrollListener(_onScrollChange);
-    widget.focusNode.removeListener(_onFocusChange);
-    _removeHandles();
     super.dispose();
-  }
-
-  void _onFocusChange() {
-    print('Focus change for interactor ($hashCode), has focus: ${widget.focusNode.hasFocus}');
-    if (widget.focusNode.hasFocus) {
-      _showHandles();
-    } else {
-      _removeHandles();
-    }
-  }
-
-  void _onTextControllerChange() {
-    if (widget.focusNode.hasFocus) {
-      print('Rebuilding handles for interactor ($hashCode)');
-      _rebuildHandles();
-    }
-  }
-
-  /// Displays [IOSEditingControls] in the app's [Overlay], if not already
-  /// displayed.
-  void _showHandles() {
-    if (_controlsOverlayEntry == null) {
-      _controlsOverlayEntry = OverlayEntry(builder: (overlayContext) {
-        return IOSEditingControls(
-          editingController: widget.editingController,
-          textController: widget.textController,
-          textFieldViewportKey: _textFieldViewportKey,
-          selectableTextKey: widget.selectableTextKey,
-          textFieldLayerLink: widget.textFieldLayerLink,
-          textContentOffsetLink: _textContentOffsetLink,
-          interactorKey: widget.scrollKey,
-          selection: widget.textController.selection,
-          handleDragMode: _handleDragMode,
-          handleColor: widget.handleColor,
-          showDebugPaint: widget.showDebugPaint,
-          onBaseHandleDragStart: _onBaseHandleDragStart,
-          onExtentHandleDragStart: _onExtentHandleDragStart,
-          onPanUpdate: _onPanUpdate,
-          onPanEnd: _onPanEnd,
-          onPanCancel: _onPanCancel,
-        );
-      });
-
-      Overlay.of(context)!.insert(_controlsOverlayEntry!);
-    }
-  }
-
-  /// Rebuilds the [IOSEditingControls] in the app's [Overlay], if
-  /// they're currently displayed.
-  void _rebuildHandles() {
-    _controlsOverlayEntry?.markNeedsBuild();
-  }
-
-  /// Removes [IOSEditingControls] from the app's [Overlay], if they're
-  /// currently displayed.
-  void _removeHandles() {
-    if (_controlsOverlayEntry != null) {
-      _controlsOverlayEntry!.remove();
-      _controlsOverlayEntry = null;
-    }
   }
 
   void _onTapDown(TapDownDetails details) {
@@ -487,10 +380,6 @@ class IOSTextfieldInteractorState extends State<IOSTextfieldInteractor> with Tic
         break;
     }
 
-    if (_controlsOverlayEntry != null) {
-      _controlsOverlayEntry!.markNeedsBuild();
-    }
-
     setState(() {
       _handleDragMode = null;
       widget.editingController.hideMagnifier();
@@ -520,10 +409,6 @@ class IOSTextfieldInteractorState extends State<IOSTextfieldInteractor> with Tic
       widget.textController.selection = widget.textController.selection.copyWith(
         baseOffset: newBase!.offset,
       );
-    }
-
-    if (_controlsOverlayEntry != null) {
-      _rebuildHandles();
     }
 
     for (final listener in _scrollChangeListeners) {
