@@ -11,7 +11,7 @@ import 'package:super_editor/src/infrastructure/text_layout.dart';
 
 import '_editing_controls.dart';
 
-/// iOS text field touch interaction surface.
+/// Android text field touch interaction surface.
 ///
 /// This widget is intended to be displayed in the foreground of
 /// a [SuperSelectableText] widget.
@@ -29,12 +29,16 @@ import '_editing_controls.dart';
 /// based on how the user interacts with this widget. Those UI elements
 /// are controller via the given [editingOverlayController].
 ///
+/// Magnifier: based on observed Android behavior, when dragging the collapsed
+/// handle, or dragging freely around the text, the magnifier is always positioned
+/// relative to the caret position (not the user's exact finger location).
+///
 /// The text is auto-scrolled when the user drags a collapsed caret in
 /// this widget. The auto-scrolling is handled by the given [textScrollController].
 ///
 /// Selection changes are made via the given [textController].
-class IOSTextFieldTouchInteractor extends StatefulWidget {
-  const IOSTextFieldTouchInteractor({
+class AndroidTextFieldTouchInteractor extends StatefulWidget {
+  const AndroidTextFieldTouchInteractor({
     Key? key,
     required this.focusNode,
     required this.textFieldLayerLink,
@@ -67,7 +71,7 @@ class IOSTextFieldTouchInteractor extends StatefulWidget {
   /// user interactions.
   final AttributedTextEditingController textController;
 
-  final IOSEditingOverlayController editingOverlayController;
+  final AndroidEditingOverlayController editingOverlayController;
 
   final TextScrollController textScrollController;
 
@@ -90,10 +94,11 @@ class IOSTextFieldTouchInteractor extends StatefulWidget {
   final Widget child;
 
   @override
-  IOSTextFieldTouchInteractorState createState() => IOSTextFieldTouchInteractorState();
+  AndroidTextFieldTouchInteractorState createState() => AndroidTextFieldTouchInteractorState();
 }
 
-class IOSTextFieldTouchInteractorState extends State<IOSTextFieldTouchInteractor> with TickerProviderStateMixin {
+class AndroidTextFieldTouchInteractorState extends State<AndroidTextFieldTouchInteractor>
+    with TickerProviderStateMixin {
   final _textViewportOffsetLink = LayerLink();
 
   TextSelection? _selectionBeforeSingleTapDown;
@@ -113,7 +118,7 @@ class IOSTextFieldTouchInteractorState extends State<IOSTextFieldTouchInteractor
   }
 
   @override
-  void didUpdateWidget(IOSTextFieldTouchInteractor oldWidget) {
+  void didUpdateWidget(AndroidTextFieldTouchInteractor oldWidget) {
     super.didUpdateWidget(oldWidget);
 
     if (widget.textScrollController != oldWidget.textScrollController) {
@@ -152,6 +157,8 @@ class IOSTextFieldTouchInteractorState extends State<IOSTextFieldTouchInteractor
     print('Previous selection: ${widget.textController.selection}');
     widget.textController.selection = TextSelection.collapsed(offset: tapTextPosition.offset);
     print('New selection: ${widget.textController.selection}');
+
+    widget.editingOverlayController.showHandles();
   }
 
   void _onTapUp(TapUpDetails details) {
@@ -402,9 +409,22 @@ class IOSTextFieldTouchInteractorState extends State<IOSTextFieldTouchInteractor
       return const SizedBox();
     }
 
+    // Calculate the magnifier offset.
+    //
+    // On Android, when dragging a collapsed selection, the magnifier should always
+    // focus on the vertical midpoint of the current extent position.
+    // TODO: can we de-dup this with similar calculations in _editing_controls?
+    final extentPosition = widget.textController.selection.extent;
+    final textLayout = widget.selectableTextKey.currentState!;
+    final extentOffsetInText = textLayout.getOffsetAtPosition(extentPosition);
+    final extentLineHeight = textLayout.getCharacterBox(extentPosition).toRect().height;
+    final extentGlobalOffset =
+        (widget.selectableTextKey.currentContext!.findRenderObject() as RenderBox).localToGlobal(extentOffsetInText);
+    final extentOffsetInViewport = (context.findRenderObject() as RenderBox).globalToLocal(extentGlobalOffset);
+
     return Positioned(
-      left: _dragOffset!.dx,
-      top: _dragOffset!.dy,
+      left: extentOffsetInViewport.dx,
+      top: extentOffsetInViewport.dy + (extentLineHeight / 2),
       child: CompositedTransformTarget(
         link: widget.editingOverlayController.magnifierFocalPoint,
         child: widget.showDebugPaint

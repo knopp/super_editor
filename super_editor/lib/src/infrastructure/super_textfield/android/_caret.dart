@@ -2,19 +2,14 @@ import 'package:flutter/widgets.dart';
 import 'package:super_editor/src/infrastructure/super_selectable_text.dart';
 import 'package:super_editor/src/infrastructure/text_layout.dart';
 
-/// [TextCaretFactory] that creates an [IOSTextFieldCaret], which
-/// paints a blinking iOS-style caret on top of a [SuperSelectableText].
-class IOSTextFieldCaretFactory implements TextCaretFactory {
-  IOSTextFieldCaretFactory({
+class AndroidTextControlsFactory implements TextCaretFactory {
+  AndroidTextControlsFactory({
     required Color color,
-    double width = 2.0,
     BorderRadius borderRadius = BorderRadius.zero,
   })  : _color = color,
-        _width = width,
         _borderRadius = borderRadius;
 
   final Color _color;
-  final double _width;
   final BorderRadius _borderRadius;
 
   @override
@@ -25,36 +20,25 @@ class IOSTextFieldCaretFactory implements TextCaretFactory {
     required bool isTextEmpty,
     required bool showCaret,
   }) {
-    return Stack(
-      children: [
-        Positioned(
-          left: 0,
-          right: 0,
-          top: 0,
-          bottom: 0,
-          child: IOSTextFieldCaret(
-            textLayout: textLayout,
-            isTextEmpty: isTextEmpty,
-            selection: selection,
-            caretColor: _color,
-            caretWidth: _width,
-            caretBorderRadius: _borderRadius,
-          ),
-        ),
-      ],
+    return AndroidTextFieldCaret(
+      textLayout: textLayout,
+      isTextEmpty: isTextEmpty,
+      selection: selection,
+      caretColor: _color,
+      caretBorderRadius: _borderRadius,
     );
   }
 }
 
-/// An iOS-style blinking caret.
+/// An Android-style blinking caret.
 ///
-/// [IOSTextFieldCaret] should be displayed on top of its corresponding
+/// [AndroidTextFieldCaret] should be displayed on top of its corresponding
 /// text, and it should be displayed at the same width and height as the
-/// text. [IOSTextFieldCaret] uses [textLayout] to calculate the
+/// text. [AndroidTextFieldCaret] uses [textLayout] to calculate the
 /// position of the caret from the top-left corner of the text and
 /// then paints a blinking caret at that location.
-class IOSTextFieldCaret extends StatefulWidget {
-  const IOSTextFieldCaret({
+class AndroidTextFieldCaret extends StatefulWidget {
+  const AndroidTextFieldCaret({
     Key? key,
     required this.textLayout,
     required this.isTextEmpty,
@@ -72,10 +56,10 @@ class IOSTextFieldCaret extends StatefulWidget {
   final BorderRadius caretBorderRadius;
 
   @override
-  _IOSTextFieldCaretState createState() => _IOSTextFieldCaretState();
+  _AndroidTextFieldCaretState createState() => _AndroidTextFieldCaretState();
 }
 
-class _IOSTextFieldCaretState extends State<IOSTextFieldCaret> with SingleTickerProviderStateMixin {
+class _AndroidTextFieldCaretState extends State<AndroidTextFieldCaret> with SingleTickerProviderStateMixin {
   late CaretBlinkController _caretBlinkController;
 
   @override
@@ -85,7 +69,7 @@ class _IOSTextFieldCaretState extends State<IOSTextFieldCaret> with SingleTicker
   }
 
   @override
-  void didUpdateWidget(IOSTextFieldCaret oldWidget) {
+  void didUpdateWidget(AndroidTextFieldCaret oldWidget) {
     super.didUpdateWidget(oldWidget);
 
     if (widget.selection != oldWidget.selection) {
@@ -102,7 +86,7 @@ class _IOSTextFieldCaretState extends State<IOSTextFieldCaret> with SingleTicker
   @override
   Widget build(BuildContext context) {
     return CustomPaint(
-      painter: _IOSCursorPainter(
+      painter: AndroidCursorPainter(
         blinkController: _caretBlinkController,
         textLayout: widget.textLayout,
         width: widget.caretWidth,
@@ -115,11 +99,8 @@ class _IOSTextFieldCaretState extends State<IOSTextFieldCaret> with SingleTicker
   }
 }
 
-/// [CustomPainter] that renders an iOS-style caret.
-///
-/// On iOS, the caret is a thin, tall rectangle.
-class _IOSCursorPainter extends CustomPainter {
-  _IOSCursorPainter({
+class AndroidCursorPainter extends CustomPainter {
+  AndroidCursorPainter({
     required this.blinkController,
     required this.textLayout,
     required this.width,
@@ -127,7 +108,7 @@ class _IOSCursorPainter extends CustomPainter {
     required this.selection,
     required this.caretColor,
     required this.isTextEmpty,
-  })  : caretPaint = Paint(),
+  })  : caretPaint = Paint()..color = caretColor,
         super(repaint: blinkController);
 
   final CaretBlinkController blinkController;
@@ -153,16 +134,17 @@ class _IOSCursorPainter extends CustomPainter {
       return;
     }
 
-    _drawCaret(canvas);
+    _drawCaret(canvas: canvas);
   }
 
-  void _drawCaret(Canvas canvas) {
+  void _drawCaret({
+    required Canvas canvas,
+  }) {
     caretPaint.color = caretColor.withOpacity(blinkController.opacity);
 
-    final textPosition = selection.extent;
-    final caretHeight = textLayout.getCharacterBox(textPosition).toRect().height;
+    final caretHeight = textLayout.getLineHeightAtPosition(selection.extent);
 
-    Offset caretOffset = isTextEmpty ? Offset.zero : textLayout.getOffsetAtPosition(textPosition);
+    Offset caretOffset = isTextEmpty ? Offset.zero : textLayout.getOffsetAtPosition(selection.extent);
 
     if (borderRadius == BorderRadius.zero) {
       canvas.drawRect(
@@ -192,13 +174,9 @@ class _IOSCursorPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_IOSCursorPainter oldDelegate) {
-    return blinkController != oldDelegate.blinkController ||
-        textLayout != oldDelegate.textLayout ||
+  bool shouldRepaint(AndroidCursorPainter oldDelegate) {
+    return textLayout != oldDelegate.textLayout ||
         selection != oldDelegate.selection ||
-        width != oldDelegate.width ||
-        borderRadius != oldDelegate.borderRadius ||
-        isTextEmpty != oldDelegate.isTextEmpty ||
-        caretColor != oldDelegate.caretColor;
+        isTextEmpty != oldDelegate.isTextEmpty;
   }
 }

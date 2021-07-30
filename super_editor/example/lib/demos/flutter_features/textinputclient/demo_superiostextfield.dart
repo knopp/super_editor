@@ -52,7 +52,7 @@ class _SuperIOSTextfieldDemoState extends State<SuperIOSTextfieldDemo> {
             _showDebugPaint = !_showDebugPaint;
           });
         },
-        child: Icon(Icons.bug_report),
+        child: const Icon(Icons.bug_report),
       ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _sizeMode == TextFieldSizeMode.singleLine
@@ -112,7 +112,8 @@ class _SuperIOSTextfieldDemoState extends State<SuperIOSTextfieldDemo> {
       textController: _textController,
       textStyleBuilder: _styleBuilder,
       selectionColor: Colors.blue.withOpacity(0.4),
-      controlsColor: Colors.blue,
+      caretColor: Colors.blue,
+      handlesColor: Colors.blue,
       minLines: minLines,
       maxLines: maxLines,
       lineHeight: lineHeight,

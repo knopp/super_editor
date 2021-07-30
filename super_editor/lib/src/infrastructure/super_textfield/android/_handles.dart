@@ -2,18 +2,31 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 
-class AndroidTextfieldCollapsedHandle extends StatelessWidget {
-  const AndroidTextfieldCollapsedHandle({
+class AndroidTextFieldHandle extends StatelessWidget {
+  const AndroidTextFieldHandle({
     Key? key,
+    required this.handleType,
     required this.color,
-    required this.radius,
+    this.radius = 8,
   }) : super(key: key);
 
+  final AndroidHandleType handleType;
   final Color color;
   final double radius;
 
   @override
   Widget build(BuildContext context) {
+    switch (handleType) {
+      case AndroidHandleType.collapsed:
+        return _buildCollapsed();
+      case AndroidHandleType.upstream:
+        return _buildUpstream();
+      case AndroidHandleType.downstream:
+        return _buildDownstream();
+    }
+  }
+
+  Widget _buildCollapsed() {
     return Transform.rotate(
       angle: -pi / 4,
       child: Container(
@@ -30,20 +43,8 @@ class AndroidTextfieldCollapsedHandle extends StatelessWidget {
       ),
     );
   }
-}
 
-class AndroidTextfieldLeftHandle extends StatelessWidget {
-  const AndroidTextfieldLeftHandle({
-    Key? key,
-    required this.color,
-    required this.radius,
-  }) : super(key: key);
-
-  final Color color;
-  final double radius;
-
-  @override
-  Widget build(BuildContext context) {
+  Widget _buildUpstream() {
     return Container(
       width: radius * 2,
       height: radius * 2,
@@ -57,20 +58,8 @@ class AndroidTextfieldLeftHandle extends StatelessWidget {
       ),
     );
   }
-}
 
-class AndroidTextfieldRightHandle extends StatelessWidget {
-  const AndroidTextfieldRightHandle({
-    Key? key,
-    required this.color,
-    required this.radius,
-  }) : super(key: key);
-
-  final Color color;
-  final double radius;
-
-  @override
-  Widget build(BuildContext context) {
+  Widget _buildDownstream() {
     return Container(
       width: radius * 2,
       height: radius * 2,
@@ -84,4 +73,10 @@ class AndroidTextfieldRightHandle extends StatelessWidget {
       ),
     );
   }
+}
+
+enum AndroidHandleType {
+  collapsed,
+  upstream,
+  downstream,
 }

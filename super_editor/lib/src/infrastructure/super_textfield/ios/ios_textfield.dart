@@ -6,7 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:super_editor/src/default_editor/super_editor.dart';
 import 'package:super_editor/src/infrastructure/_listenable_builder.dart';
 import 'package:super_editor/src/infrastructure/super_textfield/ios/_editing_controls.dart';
-import 'package:super_editor/src/infrastructure/super_textfield/ios/_text_scrollview.dart';
+import 'package:super_editor/src/infrastructure/super_textfield/infrastructure/text_scrollview.dart';
 
 import '../../attributed_text.dart';
 import '../../super_selectable_text.dart';
@@ -17,7 +17,7 @@ import '_user_interaction.dart';
 
 export '_caret.dart';
 export '_handles.dart';
-export '_magnifier.dart';
+export '../infrastructure/magnifier.dart';
 export '_toolbar.dart';
 export '_user_interaction.dart';
 
@@ -26,13 +26,13 @@ class SuperIOSTextfield extends StatefulWidget {
     Key? key,
     this.focusNode,
     this.textController,
+    required this.caretColor,
     required this.selectionColor,
-    required this.controlsColor,
+    required this.handlesColor,
     this.textStyleBuilder = defaultStyleBuilder,
     this.minLines,
     this.maxLines = 1,
     this.lineHeight,
-    this.padding = EdgeInsets.zero,
     this.textInputAction = TextInputAction.done,
     this.showDebugPaint = false,
     this.onPerformActionPressed,
@@ -40,15 +40,25 @@ class SuperIOSTextfield extends StatefulWidget {
         assert(maxLines == null || maxLines == 1 || lineHeight != null, 'maxLines > 1 requires a non-null lineHeight'),
         super(key: key);
 
+  /// [FocusNode] attached to this text field.
   final FocusNode? focusNode;
 
+  /// Controller that owns the text content and text selection for
+  /// this text field.
   final AttributedTextEditingController? textController;
 
+  /// Text style factory that creates styles for the content in
+  /// [textController] based on the attributions in that content.
   final AttributionStyleBuilder textStyleBuilder;
 
+  /// Color of the caret.
+  final Color caretColor;
+
+  /// Color of the selection rectangle for selected text.
   final Color selectionColor;
 
-  final Color controlsColor;
+  /// Color of the selection handles.
+  final Color handlesColor;
 
   /// The minimum height of this text field, represented as a
   /// line count.
@@ -89,10 +99,11 @@ class SuperIOSTextfield extends StatefulWidget {
   /// provided and used for all text field height calculations.
   final double? lineHeight;
 
-  final EdgeInsets padding;
-
+  /// The type of action associated with the action button on the mobile
+  /// keyboard.
   final TextInputAction textInputAction;
 
+  /// Whether to paint debug guides.
   final bool showDebugPaint;
 
   /// Callback invoked when the user presses the "action" button
@@ -280,7 +291,7 @@ class _SuperIOSTextfieldState extends State<SuperIOSTextfield>
           textFieldKey: _textFieldKey,
           textContentLayerLink: _textContentLayerLink,
           textContentKey: _textContentKey,
-          handleColor: widget.controlsColor,
+          handleColor: widget.handlesColor,
           showDebugPaint: widget.showDebugPaint,
         );
       });
@@ -385,61 +396,58 @@ class _SuperIOSTextfieldState extends State<SuperIOSTextfield>
           editingOverlayController: _editingOverlayController,
           textScrollController: _textScrollController,
           isMultiline: _isMultiline,
-          handleColor: widget.controlsColor,
+          handleColor: widget.handlesColor,
           showDebugPaint: widget.showDebugPaint,
-          child: Padding(
-            padding: widget.padding,
-            child: TextScrollView(
-              key: _scrollKey,
-              textScrollController: _textScrollController,
-              textKey: _textContentKey,
-              textEditingController: _textEditingController,
-              minLines: widget.minLines,
-              maxLines: widget.maxLines,
-              lineHeight: widget.lineHeight,
-              showDebugPaint: widget.showDebugPaint,
-              child: ListenableBuilder(
-                listenable: _textEditingController,
-                builder: (context) {
-                  final textSpan = _textEditingController.text.text.isNotEmpty
-                      ? _textEditingController.text.computeTextSpan(widget.textStyleBuilder)
-                      : AttributedText(text: 'enter text').computeTextSpan(
-                          (attributions) => widget.textStyleBuilder(attributions).copyWith(color: Colors.grey));
+          child: TextScrollView(
+            key: _scrollKey,
+            textScrollController: _textScrollController,
+            textKey: _textContentKey,
+            textEditingController: _textEditingController,
+            minLines: widget.minLines,
+            maxLines: widget.maxLines,
+            lineHeight: widget.lineHeight,
+            perLineAutoScrollDuration: const Duration(milliseconds: 100),
+            showDebugPaint: widget.showDebugPaint,
+            child: ListenableBuilder(
+              listenable: _textEditingController,
+              builder: (context) {
+                final textSpan = _textEditingController.text.text.isNotEmpty
+                    ? _textEditingController.text.computeTextSpan(widget.textStyleBuilder)
+                    : AttributedText(text: 'enter text').computeTextSpan(
+                        (attributions) => widget.textStyleBuilder(attributions).copyWith(color: Colors.grey));
 
-                  return CompositedTransformTarget(
-                    link: _textContentLayerLink,
-                    child: Stack(
-                      children: [
-                        // TODO: switch out textSelectionDecoration and textCaretFactory
-                        //       for backgroundBuilders and foregroundBuilders, respectively
-                        //
-                        //       add the floating cursor as a foreground builder
-                        SuperSelectableText(
-                          key: _textContentKey,
-                          textSpan: textSpan,
-                          textSelection: _textEditingController.selection,
-                          textSelectionDecoration: TextSelectionDecoration(selectionColor: widget.selectionColor),
-                          showCaret: true,
-                          textCaretFactory: IOSTextFieldCaretFactory(
-                            color:
-                                _floatingCursorController.isShowingFloatingCursor ? Colors.grey : widget.controlsColor,
-                            width: 2,
-                          ),
+                return CompositedTransformTarget(
+                  link: _textContentLayerLink,
+                  child: Stack(
+                    children: [
+                      // TODO: switch out textSelectionDecoration and textCaretFactory
+                      //       for backgroundBuilders and foregroundBuilders, respectively
+                      //
+                      //       add the floating cursor as a foreground builder
+                      SuperSelectableText(
+                        key: _textContentKey,
+                        textSpan: textSpan,
+                        textSelection: _textEditingController.selection,
+                        textSelectionDecoration: TextSelectionDecoration(selectionColor: widget.selectionColor),
+                        showCaret: true,
+                        textCaretFactory: IOSTextFieldCaretFactory(
+                          color: _floatingCursorController.isShowingFloatingCursor ? Colors.grey : widget.caretColor,
+                          width: 2,
                         ),
-                        Positioned(
-                          left: 0,
-                          top: 0,
-                          right: 0,
-                          bottom: 0,
-                          child: IOSFloatingCursor(
-                            controller: _floatingCursorController,
-                          ),
+                      ),
+                      Positioned(
+                        left: 0,
+                        top: 0,
+                        right: 0,
+                        bottom: 0,
+                        child: IOSFloatingCursor(
+                          controller: _floatingCursorController,
                         ),
-                      ],
-                    ),
-                  );
-                },
-              ),
+                      ),
+                    ],
+                  ),
+                );
+              },
             ),
           ),
         ),

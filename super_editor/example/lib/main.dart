@@ -255,7 +255,7 @@ final _menu = <_MenuGroup>[
         icon: Icons.text_fields,
         title: 'Super Android Textfield',
         pageBuilder: (context) {
-          return SuperAndroidTextfieldDemo();
+          return SuperAndroidTextFieldDemo();
         },
       ),
     ],

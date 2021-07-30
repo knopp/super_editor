@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-class AndroidTextfieldToolbar extends StatelessWidget {
-  const AndroidTextfieldToolbar({
+class AndroidTextFieldToolbar extends StatelessWidget {
+  const AndroidTextFieldToolbar({
     Key? key,
     required this.onCutPressed,
     required this.onCopyPressed,

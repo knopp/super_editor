@@ -5,7 +5,7 @@ import 'package:super_editor/src/infrastructure/super_selectable_text.dart';
 import 'package:super_editor/src/infrastructure/super_textfield/super_textfield.dart';
 
 // TODO: convert to newer logger
-final _log = Logger(scope: '_text_scrollview.dart');
+final _log = Logger(scope: 'text_scrollview.dart');
 
 /// A scrollable that positions its [child] based on text metrics.
 ///
@@ -31,6 +31,7 @@ class TextScrollView extends StatefulWidget {
     this.minLines,
     this.maxLines,
     this.lineHeight,
+    this.perLineAutoScrollDuration = Duration.zero,
     this.showDebugPaint = false,
     required this.child,
   })  : assert(minLines == null || minLines == 1 || lineHeight != null, 'minLines > 1 requires a non-null lineHeight'),
@@ -84,6 +85,11 @@ class TextScrollView extends StatefulWidget {
   /// To avoid that situation, a single, explicit [lineHeight] is
   /// provided and used for all text field height calculations.
   final double? lineHeight;
+
+  /// The time it takes to scroll to the next line, when auto-scrolling.
+  ///
+  /// A value of [Duration.zero] jumps immediately to the next line.
+  final Duration perLineAutoScrollDuration;
 
   /// Whether to paint debug guides.
   final bool showDebugPaint;
@@ -263,7 +269,15 @@ class _TextScrollViewState extends State<TextScrollView>
   }
 
   void _onTextScrollChange() {
-    _scrollController.jumpTo(widget.textScrollController.scrollOffset);
+    if (widget.perLineAutoScrollDuration == Duration.zero || !isMultiline) {
+      _scrollController.jumpTo(widget.textScrollController.scrollOffset);
+    } else {
+      _scrollController.animateTo(
+        widget.textScrollController.scrollOffset,
+        duration: widget.perLineAutoScrollDuration,
+        curve: Curves.easeOut,
+      );
+    }
   }
 
   /// Returns true if the viewport height changed, false otherwise.

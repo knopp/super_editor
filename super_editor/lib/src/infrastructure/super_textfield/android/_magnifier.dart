@@ -2,9 +2,9 @@ import 'package:flutter/widgets.dart';
 import 'package:super_editor/src/infrastructure/super_textfield/infrastructure/magnifier.dart';
 import 'package:super_editor/src/infrastructure/super_textfield/infrastructure/outer_box_shadow.dart';
 
-/// An iOS magnifying glass that follows a [LayerLink].
-class IOSFollowingMagnifier extends StatelessWidget {
-  const IOSFollowingMagnifier({
+/// An Android magnifying glass that follows a [LayerLink].
+class AndroidFollowingMagnifier extends StatelessWidget {
+  const AndroidFollowingMagnifier({
     Key? key,
     required this.layerLink,
     this.offsetFromFocalPoint = Offset.zero,
@@ -20,7 +20,7 @@ class IOSFollowingMagnifier extends StatelessWidget {
       offset: offsetFromFocalPoint,
       child: FractionalTranslation(
         translation: const Offset(-0.5, -0.5),
-        child: IOSMagnifyingGlass(
+        child: AndroidMagnifyingGlass(
           offsetFromFocalPoint: offsetFromFocalPoint,
         ),
       ),
@@ -28,11 +28,12 @@ class IOSFollowingMagnifier extends StatelessWidget {
   }
 }
 
-class IOSMagnifyingGlass extends StatelessWidget {
-  static const _diameter = 92.0;
-  static const _magnification = 2.0;
+class AndroidMagnifyingGlass extends StatelessWidget {
+  static const _width = 92.0;
+  static const _height = 48.0;
+  static const _cornerRadius = 8.0;
 
-  const IOSMagnifyingGlass({
+  const AndroidMagnifyingGlass({
     this.offsetFromFocalPoint = Offset.zero,
   });
 
@@ -43,29 +44,18 @@ class IOSMagnifyingGlass extends StatelessWidget {
     return Stack(
       children: [
         MagnifyingGlass(
-          shape: const CircleBorder(),
-          size: const Size(_diameter, _diameter),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(_cornerRadius),
+          ),
           offsetFromFocalPoint: offsetFromFocalPoint,
-          magnificationScale: _magnification,
+          size: const Size(_width, _height),
+          magnificationScale: 1.5,
         ),
         Container(
-          width: _diameter,
-          height: _diameter,
+          width: _width,
+          height: _height,
           decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            border: Border.all(color: const Color(0xFFAAAAAA), width: 1),
-            gradient: const LinearGradient(
-              colors: [
-                Color(0x22000000),
-                Color(0x00000000),
-              ],
-              stops: [
-                0.0,
-                0.5,
-              ],
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-            ),
+            borderRadius: BorderRadius.circular(_cornerRadius),
             boxShadow: const [
               OuterBoxShadow(
                 color: Color(0x44000000),
