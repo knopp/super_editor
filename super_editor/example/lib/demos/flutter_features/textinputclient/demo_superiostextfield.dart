@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:logging/logging.dart';
 import 'package:super_editor/super_editor.dart';
 
 /// Demo of [SuperIOSTextfield].
@@ -17,6 +18,20 @@ class _SuperIOSTextfieldDemoState extends State<SuperIOSTextfieldDemo> {
   TextFieldSizeMode _sizeMode = TextFieldSizeMode.short;
 
   bool _showDebugPaint = false;
+
+  @override
+  void initState() {
+    super.initState();
+
+    initLoggers(Level.INFO, [textFieldLog, iosTextFieldLog]);
+  }
+
+  @override
+  void dispose() {
+    deactivateLoggers([textFieldLog, iosTextFieldLog]);
+
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {

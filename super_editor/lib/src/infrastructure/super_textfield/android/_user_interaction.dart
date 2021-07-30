@@ -3,6 +3,7 @@ import 'dart:ui';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:super_editor/src/infrastructure/_logging.dart';
 import 'package:super_editor/src/infrastructure/multi_tap_gesture.dart';
 import 'package:super_editor/src/infrastructure/super_selectable_text.dart';
 import 'package:super_editor/src/infrastructure/super_textfield/infrastructure/text_scrollview.dart';
@@ -10,6 +11,8 @@ import 'package:super_editor/src/infrastructure/super_textfield/super_textfield.
 import 'package:super_editor/src/infrastructure/text_layout.dart';
 
 import '_editing_controls.dart';
+
+final _log = androidTextFieldLog;
 
 /// Android text field touch interaction surface.
 ///
@@ -134,7 +137,7 @@ class AndroidTextFieldTouchInteractorState extends State<AndroidTextFieldTouchIn
   }
 
   void _onTapDown(TapDownDetails details) {
-    print('_onTapDown');
+    _log.fine('_onTapDown');
 
     widget.focusNode.requestFocus();
 
@@ -152,20 +155,18 @@ class AndroidTextFieldTouchInteractorState extends State<AndroidTextFieldTouchIn
     if (tapTextPosition == null) {
       // This shouldn't be possible, but we'll ignore the tap if we can't
       // map it to a position within the text.
-      print('Warning: received a tap-down event on IOSTextFieldInteractor that is not on top of any text');
+      _log.warning('received a tap-down event on IOSTextFieldInteractor that is not on top of any text');
       return;
     }
 
     // Update the text selection to a collapsed selection where the user tapped.
-    print('Previous selection: ${widget.textController.selection}');
     widget.textController.selection = TextSelection.collapsed(offset: tapTextPosition.offset);
-    print('New selection: ${widget.textController.selection}');
 
     widget.editingOverlayController.showHandles();
   }
 
   void _onTapUp(TapUpDetails details) {
-    print('_onTapUp()');
+    _log.fine('_onTapUp()');
     // If the user tapped on a collapsed caret, or tapped on an
     // expanded selection, toggle the toolbar appearance.
 
@@ -173,7 +174,7 @@ class AndroidTextFieldTouchInteractorState extends State<AndroidTextFieldTouchIn
     if (tapTextPosition == null) {
       // This shouldn't be possible, but we'll ignore the tap if we can't
       // map it to a position within the text.
-      print('Warning: received a tap-up event on IOSTextFieldInteractor that is not on top of any text');
+      _log.warning('received a tap-up event on IOSTextFieldInteractor that is not on top of any text');
       return;
     }
 
@@ -200,7 +201,7 @@ class AndroidTextFieldTouchInteractorState extends State<AndroidTextFieldTouchIn
   }
 
   void _onDoubleTapDown(TapDownDetails details) {
-    print('Double tap');
+    _log.fine('Double tap');
     widget.focusNode.requestFocus();
 
     // When the user released the first tap, the toolbar was set
@@ -246,7 +247,7 @@ class AndroidTextFieldTouchInteractorState extends State<AndroidTextFieldTouchIn
   }
 
   void _onTextPanStart(DragStartDetails details) {
-    print('_onTextPanStart()');
+    _log.fine('_onTextPanStart()');
     setState(() {
       _isDraggingCaret = true;
       _globalDragOffset = details.globalPosition;
@@ -258,7 +259,7 @@ class AndroidTextFieldTouchInteractorState extends State<AndroidTextFieldTouchIn
   }
 
   void _onPanUpdate(DragUpdateDetails details) {
-    // print('_onPanUpdate handle mode: $_handleDragMode, global position: ${details.globalPosition}');
+    _log.fine('_onPanUpdate()');
 
     if (_isDraggingCaret) {
       widget.textController.selection = TextSelection.collapsed(
@@ -279,17 +280,17 @@ class AndroidTextFieldTouchInteractorState extends State<AndroidTextFieldTouchIn
   }
 
   void _onPanEnd(DragEndDetails details) {
-    print('_onPanEnd()');
+    _log.fine('_onPanEnd()');
     _onHandleDragEnd();
   }
 
   void _onPanCancel() {
-    print('_onPanCancel()');
+    _log.fine('_onPanCancel()');
     _onHandleDragEnd();
   }
 
   void _onHandleDragEnd() {
-    print('_onHandleDragEnd()');
+    _log.fine('_onHandleDragEnd()');
     widget.textScrollController.stopScrolling();
 
     if (_isDraggingCaret) {
@@ -371,7 +372,7 @@ class AndroidTextFieldTouchInteractorState extends State<AndroidTextFieldTouchIn
       link: _textViewportOffsetLink,
       child: GestureDetector(
         onTap: () {
-          print('Intercepting single tap');
+          _log.fine('Intercepting single tap');
           // This GestureDetector is here to prevent taps from going further
           // up the tree. There must an issue with the custom gesture detector
           // used below that's allowing taps to bubble up even if handled.
@@ -382,7 +383,7 @@ class AndroidTextFieldTouchInteractorState extends State<AndroidTextFieldTouchIn
           // TODO: fix the custom gesture detector in the RawGestureDetector.
         },
         onDoubleTap: () {
-          print('Intercepting double tap');
+          _log.fine('Intercepting double tap');
           // no-op
         },
         child: DecoratedBox(

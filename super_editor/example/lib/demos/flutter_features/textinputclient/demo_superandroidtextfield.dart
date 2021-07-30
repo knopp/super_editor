@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:logging/logging.dart';
 import 'package:super_editor/super_editor.dart';
 
 /// Demo of [SuperAndroidTextField].
@@ -19,11 +20,24 @@ class _SuperAndroidTextFieldDemoState extends State<SuperAndroidTextFieldDemo> {
   bool _showDebugPaint = false;
 
   @override
+  void initState() {
+    super.initState();
+
+    initLoggers(Level.INFO, [textFieldLog, androidTextFieldLog]);
+  }
+
+  @override
+  void dispose() {
+    deactivateLoggers([textFieldLog, androidTextFieldLog]);
+
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: GestureDetector(
         onTap: () {
-          print('Removing textfield focus');
           _screenFocusNode.requestFocus();
         },
         behavior: HitTestBehavior.translucent,

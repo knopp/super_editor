@@ -3,12 +3,15 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:super_editor/src/infrastructure/_listenable_builder.dart';
+import 'package:super_editor/src/infrastructure/_logging.dart';
 import 'package:super_editor/src/infrastructure/super_selectable_text.dart';
 import 'package:super_editor/src/infrastructure/super_textfield/android/_magnifier.dart';
 import 'package:super_editor/src/infrastructure/super_textfield/android/android_textfield.dart';
 import 'package:super_editor/src/infrastructure/super_textfield/infrastructure/text_scrollview.dart';
 import 'package:super_editor/src/infrastructure/super_textfield/infrastructure/toolbar_position_delegate.dart';
 import 'package:super_editor/src/infrastructure/super_textfield/super_textfield.dart';
+
+final _log = androidTextFieldLog;
 
 /// Overlay editing controls for an Android-style text field.
 ///
@@ -124,7 +127,7 @@ class _AndroidEditingOverlayControlsState extends State<AndroidEditingOverlayCon
   }
 
   void _onCollapsedPanStart(DragStartDetails details) {
-    print('_onCollapsedPanStart');
+    _log.fine('_onCollapsedPanStart');
 
     widget.editingController
       ..hideToolbar()
@@ -154,7 +157,7 @@ class _AndroidEditingOverlayControlsState extends State<AndroidEditingOverlayCon
   }
 
   void _onBasePanStart(DragStartDetails details) {
-    print('_onBasePanStart');
+    _log.fine('_onBasePanStart');
 
     // TODO: de-dup the calculation of the mid-line focal point
     final globalOffsetInMiddleOfLine =
@@ -184,7 +187,7 @@ class _AndroidEditingOverlayControlsState extends State<AndroidEditingOverlayCon
   }
 
   void _onExtentPanStart(DragStartDetails details) {
-    print('_onExtentPanStart');
+    _log.fine('_onExtentPanStart');
 
     // TODO: de-dup the calculation of the mid-line focal point
     final globalOffsetInMiddleOfLine =
@@ -247,17 +250,17 @@ class _AndroidEditingOverlayControlsState extends State<AndroidEditingOverlayCon
   }
 
   void _onPanEnd(DragEndDetails details) {
-    print('_onPanEnd');
+    _log.fine('_onPanEnd');
     _onHandleDragEnd();
   }
 
   void _onPanCancel() {
-    print('_onPanCancel');
+    _log.fine('_onPanCancel');
     _onHandleDragEnd();
   }
 
   void _onHandleDragEnd() {
-    print('_onHandleDragEnd()');
+    _log.fine('_onHandleDragEnd()');
     widget.textScrollController.stopScrolling();
     widget.textScrollController.removeListener(_updateSelectionForNewDragHandleLocation);
 
@@ -284,9 +287,6 @@ class _AndroidEditingOverlayControlsState extends State<AndroidEditingOverlayCon
     final textOffset = widget.textContentKey.currentState!.getOffsetAtPosition(position);
     final globalOffset =
         (widget.textContentKey.currentContext!.findRenderObject() as RenderBox).localToGlobal(textOffset);
-    print('Global: $globalOffset');
-    print(
-        'Viewport: ${(widget.textFieldKey.currentContext!.findRenderObject() as RenderBox).globalToLocal(globalOffset)}');
     return (widget.textFieldKey.currentContext!.findRenderObject() as RenderBox).globalToLocal(globalOffset);
   }
 
@@ -331,7 +331,6 @@ class _AndroidEditingOverlayControlsState extends State<AndroidEditingOverlayCon
           widget.editingController.textController,
         },
         builder: (context) {
-          print('Rebuilding due to editingController change');
           return Stack(
             children: [
               // Build the focal point for the magnifier
@@ -364,13 +363,11 @@ class _AndroidEditingOverlayControlsState extends State<AndroidEditingOverlayCon
     if (widget.editingController.textController.selection.isCollapsed) {
       final extentOffsetInViewport =
           _textPositionToViewportOffset(widget.editingController.textController.selection.extent);
-      print('Extent offset in viewport: $extentOffsetInViewport');
       final lineHeight = widget.textContentKey.currentState!
           .getLineHeightAtPosition(widget.editingController.textController.selection.extent);
 
       toolbarTopAnchor = extentOffsetInViewport - const Offset(0, toolbarGap);
       toolbarBottomAnchor = extentOffsetInViewport + Offset(0, lineHeight) + const Offset(0, toolbarGap);
-      print('Collapsed top anchor offset in viewport: $toolbarTopAnchor');
     } else {
       final selectionBoxes =
           widget.textContentKey.currentState!.getBoxesForSelection(widget.editingController.textController.selection);
@@ -409,8 +406,6 @@ class _AndroidEditingOverlayControlsState extends State<AndroidEditingOverlayCon
         viewportHeight + toolbarGap,
       ),
     );
-
-    print('Adjusted top anchor: $toolbarTopAnchor');
 
     final textFieldGlobalOffset =
         (widget.textFieldKey.currentContext!.findRenderObject() as RenderBox).localToGlobal(Offset.zero);
@@ -460,13 +455,13 @@ class _AndroidEditingOverlayControlsState extends State<AndroidEditingOverlayCon
   }
 
   List<Widget> _buildDraggableOverlayHandles() {
-    if (widget.editingController.textController.selection.extentOffset < 0) {
-      print('No extent -> no drag handles');
-      // There is no selection. Draw nothing.
+    if (!widget.editingController.areHandlesVisible) {
       return [];
     }
 
-    if (!widget.editingController.areHandlesVisible) {
+    if (widget.editingController.textController.selection.extentOffset < 0) {
+      _log.finer('Not building overlay handles because there is no selection');
+      // There is no selection. Draw nothing.
       return [];
     }
 
@@ -485,7 +480,7 @@ class _AndroidEditingOverlayControlsState extends State<AndroidEditingOverlayCon
     final extentLineHeight = widget.textContentKey.currentState!.getCharacterBox(extentTextPosition).toRect().height;
 
     if (extentLineHeight == 0) {
-      print('No height info -> no drag handles');
+      _log.finer('Not building collapsed handle because the text layout reported a zero line-height');
       // A line height of zero indicates that the text isn't laid out yet.
       // Schedule a rebuild to give the text a frame to layout.
       _scheduleRebuildBecauseTextIsNotLaidOutYet();
@@ -527,7 +522,7 @@ class _AndroidEditingOverlayControlsState extends State<AndroidEditingOverlayCon
         _textPositionToTextOffset(downstreamTextPosition) + Offset(0, downstreamLineHeight);
 
     if (upstreamLineHeight == 0 || downstreamLineHeight == 0) {
-      print('No height info -> no drag handles');
+      _log.finer('Not building expanded handles because the text layout reported a zero line-height');
       // A line height of zero indicates that the text isn't laid out yet.
       // Schedule a rebuild to give the text a frame to layout.
       _scheduleRebuildBecauseTextIsNotLaidOutYet();

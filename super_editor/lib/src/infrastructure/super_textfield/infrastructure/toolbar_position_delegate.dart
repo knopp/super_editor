@@ -2,6 +2,9 @@ import 'dart:math';
 
 import 'package:flutter/painting.dart';
 import 'package:flutter/widgets.dart';
+import 'package:super_editor/src/infrastructure/_logging.dart';
+
+final _log = textFieldLog;
 
 /// A [SingleChildLayoutDelegate] that prevents its child from exceeding
 /// the screen boundaries.
@@ -31,15 +34,15 @@ class ToolbarPositionDelegate extends SingleChildLayoutDelegate {
 
     final constrainedOffset = Offset(x, desiredTopLeft.dy);
 
-    // print('ToolbarPositionDelegate:');
-    // print(' - available space: $size');
-    // print(' - child size: $childSize');
-    // print(' - text field offset: $textFieldGlobalOffset');
-    // print(' - ideal y-position: ${textFieldGlobalOffset.dy + desiredTopAnchorInTextField.dy}');
-    // print(' - fits above text field: $fitsAboveTextField');
-    // print(' - desired anchor: $desiredAnchor');
-    // print(' - desired top left: $desiredTopLeft');
-    // print(' - actual offset: $constrainedOffset');
+    _log.finer('ToolbarPositionDelegate:');
+    _log.finer(' - available space: $size');
+    _log.finer(' - child size: $childSize');
+    _log.finer(' - text field offset: $textFieldGlobalOffset');
+    _log.finer(' - ideal y-position: ${textFieldGlobalOffset.dy + desiredTopAnchorInTextField.dy}');
+    _log.finer(' - fits above text field: $fitsAboveTextField');
+    _log.finer(' - desired anchor: $desiredAnchor');
+    _log.finer(' - desired top left: $desiredTopLeft');
+    _log.finer(' - actual offset: $constrainedOffset');
 
     return constrainedOffset;
   }

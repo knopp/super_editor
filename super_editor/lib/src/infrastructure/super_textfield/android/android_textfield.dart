@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:super_editor/src/infrastructure/_listenable_builder.dart';
+import 'package:super_editor/src/infrastructure/_logging.dart';
 import 'package:super_editor/src/infrastructure/super_textfield/android/_editing_controls.dart';
 import 'package:super_editor/src/infrastructure/super_textfield/android/_user_interaction.dart';
 import 'package:super_editor/src/infrastructure/super_textfield/infrastructure/text_scrollview.dart';
@@ -10,6 +11,8 @@ import 'package:super_editor/super_editor.dart';
 export '_caret.dart';
 export '_handles.dart';
 export '_toolbar.dart';
+
+final _log = androidTextFieldLog;
 
 class SuperAndroidTextfield extends StatefulWidget {
   const SuperAndroidTextfield({
@@ -231,7 +234,7 @@ class _SuperAndroidTextfieldState extends State<SuperAndroidTextfield>
   void _onFocusChange() {
     if (_focusNode.hasFocus) {
       if (_textInputConnection == null) {
-        print('Attaching TextInputClient to TextInput');
+        _log.info('Attaching TextInputClient to TextInput');
         setState(() {
           _textInputConnection = TextInput.attach(
               this,
@@ -246,7 +249,7 @@ class _SuperAndroidTextfieldState extends State<SuperAndroidTextfield>
         });
       }
     } else {
-      print('Detaching TextInputClient from TextInput.');
+      _log.info('Detaching TextInputClient from TextInput.');
       setState(() {
         _textInputConnection?.close();
         _textInputConnection = null;
@@ -352,7 +355,7 @@ class _SuperAndroidTextfieldState extends State<SuperAndroidTextfield>
 
   @override
   void connectionClosed() {
-    print('My TextInputClient: connectionClosed()');
+    _log.info('TextInputClient: connectionClosed()');
     _textInputConnection = null;
   }
 

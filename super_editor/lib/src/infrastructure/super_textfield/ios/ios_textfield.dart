@@ -5,6 +5,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:super_editor/src/default_editor/super_editor.dart';
 import 'package:super_editor/src/infrastructure/_listenable_builder.dart';
+import 'package:super_editor/src/infrastructure/_logging.dart';
 import 'package:super_editor/src/infrastructure/super_textfield/ios/_editing_controls.dart';
 import 'package:super_editor/src/infrastructure/super_textfield/infrastructure/text_scrollview.dart';
 
@@ -20,6 +21,8 @@ export '_handles.dart';
 export '../infrastructure/magnifier.dart';
 export '_toolbar.dart';
 export '_user_interaction.dart';
+
+final _log = iosTextFieldLog;
 
 class SuperIOSTextfield extends StatefulWidget {
   const SuperIOSTextfield({
@@ -248,7 +251,7 @@ class _SuperIOSTextfieldState extends State<SuperIOSTextfield>
   void _onFocusChange() {
     if (_focusNode.hasFocus) {
       if (_textInputConnection == null) {
-        print('Attaching TextInputClient to TextInput');
+        _log.info('Attaching TextInputClient to TextInput');
         setState(() {
           _textInputConnection = TextInput.attach(
               this,
@@ -263,7 +266,7 @@ class _SuperIOSTextfieldState extends State<SuperIOSTextfield>
         });
       }
     } else {
-      print('Detaching TextInputClient from TextInput.');
+      _log.info('Detaching TextInputClient from TextInput.');
       setState(() {
         _textInputConnection?.close();
         _textInputConnection = null;
@@ -377,7 +380,7 @@ class _SuperIOSTextfieldState extends State<SuperIOSTextfield>
 
   @override
   void connectionClosed() {
-    print('My TextInputClient: connectionClosed()');
+    _log.info('TextInputClient: connectionClosed()');
     _textInputConnection = null;
   }
 

@@ -4,7 +4,7 @@ import 'package:flutter/painting.dart';
 import '_logging.dart';
 import 'attributed_spans.dart';
 
-final _log = Logger(scope: 'AttributedText');
+final _log = attributionsLog;
 
 /// Text with attributions applied to desired spans of text.
 ///
@@ -115,7 +115,7 @@ class AttributedText with ChangeNotifier {
   /// Copies all text and attributions from [startOffset] to
   /// [endOffset], inclusive, and returns them as a new [AttributedText].
   AttributedText copyText(int startOffset, [int? endOffset]) {
-    _log.log('copyText', 'start: $startOffset, end: $endOffset');
+    _log.fine('start: $startOffset, end: $endOffset');
 
     // Note: -1 because copyText() uses an exclusive `start` and `end` but
     // _copyAttributionRegion() uses an inclusive `start` and `end`.
@@ -128,7 +128,7 @@ class AttributedText with ChangeNotifier {
     } else {
       endCopyOffset = text.length - 1;
     }
-    _log.log('copyText', 'offsets, start: $startCopyOffset, end: $endCopyOffset');
+    _log.fine('offsets, start: $startCopyOffset, end: $endCopyOffset');
 
     return AttributedText(
       text: text.substring(startOffset, endOffset),
@@ -139,17 +139,17 @@ class AttributedText with ChangeNotifier {
   /// Returns a copy of this [AttributedText] with the [other] text
   /// and attributions appended to the end.
   AttributedText copyAndAppend(AttributedText other) {
-    _log.log('copyAndAppend', 'our attributions before pushing them:');
-    _log.log('copyAndAppend', spans.toString());
+    _log.fine('our attributions before pushing them:');
+    _log.fine(spans.toString());
     if (other.text.isEmpty) {
-      _log.log('copyAndAppend', '`other` has no text. Returning a direct copy of ourselves.');
+      _log.fine('`other` has no text. Returning a direct copy of ourselves.');
       return AttributedText(
         text: text,
         spans: spans.copy(),
       );
     }
     if (text.isEmpty) {
-      _log.log('copyAndAppend', 'our `text` is empty. Returning a direct copy of the `other` text.');
+      _log.fine('our `text` is empty. Returning a direct copy of the `other` text.');
       return AttributedText(
         text: other.text,
         spans: other.spans.copy(),
@@ -174,17 +174,17 @@ class AttributedText with ChangeNotifier {
     required int startOffset,
     Set<Attribution> applyAttributions = const {},
   }) {
-    _log.log('insertString', 'text: "$textToInsert", start: $startOffset, attributions: $applyAttributions');
+    _log.fine('text: "$textToInsert", start: $startOffset, attributions: $applyAttributions');
 
-    _log.log('insertString', 'copying text to the left');
+    _log.fine('copying text to the left');
     final startText = copyText(0, startOffset);
-    _log.log('insertString', 'startText: $startText');
+    _log.fine('startText: $startText');
 
-    _log.log('insertString', 'copying text to the right');
+    _log.fine('copying text to the right');
     final endText = copyText(startOffset);
-    _log.log('insertString', 'endText: $endText');
+    _log.fine('endText: $endText');
 
-    _log.log('insertString', 'creating new attributed text for insertion');
+    _log.fine('creating new attributed text for insertion');
     final insertedText = AttributedText(
       text: textToInsert,
     );
@@ -192,9 +192,9 @@ class AttributedText with ChangeNotifier {
     for (dynamic attribution in applyAttributions) {
       insertedText.addAttribution(attribution, insertTextRange);
     }
-    _log.log('insertString', 'insertedText: $insertedText');
+    _log.fine('insertedText: $insertedText');
 
-    _log.log('insertString', 'combining left text, insertion text, and right text');
+    _log.fine('combining left text, insertion text, and right text');
     return startText.copyAndAppend(insertedText).copyAndAppend(endText);
   }
 
@@ -205,9 +205,9 @@ class AttributedText with ChangeNotifier {
     required int startOffset,
     required int endOffset,
   }) {
-    _log.log('removeRegion', 'Removing text region from $startOffset to $endOffset');
-    _log.log('removeRegion', 'initial attributions:');
-    _log.log('removeRegion', spans.toString());
+    _log.fine('Removing text region from $startOffset to $endOffset');
+    _log.fine('initial attributions:');
+    _log.fine(spans.toString());
     final reducedText = (startOffset > 0 ? text.substring(0, startOffset) : '') +
         (endOffset < text.length ? text.substring(endOffset) : '');
 
@@ -216,9 +216,9 @@ class AttributedText with ChangeNotifier {
         startOffset: startOffset,
         count: endOffset - startOffset,
       );
-    _log.log('removeRegion', 'reduced text length: ${reducedText.length}');
-    _log.log('removeRegion', 'remaining attributions:');
-    _log.log('removeRegion', contractedAttributions.toString());
+    _log.fine('reduced text length: ${reducedText.length}');
+    _log.fine('remaining attributions:');
+    _log.fine(contractedAttributions.toString());
 
     return AttributedText(
       text: reducedText,
@@ -241,13 +241,13 @@ class AttributedText with ChangeNotifier {
   /// attribution and constructs [TextStyle]s accordingly.
   // TODO: remove this method and use [visitAttributions()] to compute TextSpan
   TextSpan computeTextSpan(AttributionStyleBuilder styleBuilder) {
-    _log.log('computeTextSpan', 'text length: ${text.length}');
-    _log.log('computeTextSpan', 'attributions used to compute spans:');
-    _log.log('computeTextSpan', spans.toString());
+    _log.fine('text length: ${text.length}');
+    _log.fine('attributions used to compute spans:');
+    _log.fine(spans.toString());
 
     if (text.isEmpty) {
       // There is no text and therefore no attributions.
-      _log.log('computeTextSpan', 'text is empty. Returning empty TextSpan.');
+      _log.fine('text is empty. Returning empty TextSpan.');
       return TextSpan(text: '', style: styleBuilder({}));
     }
 

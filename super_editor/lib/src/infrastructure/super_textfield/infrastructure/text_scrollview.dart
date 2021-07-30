@@ -4,8 +4,7 @@ import 'package:super_editor/src/infrastructure/_logging.dart';
 import 'package:super_editor/src/infrastructure/super_selectable_text.dart';
 import 'package:super_editor/src/infrastructure/super_textfield/super_textfield.dart';
 
-// TODO: convert to newer logger
-final _log = Logger(scope: 'text_scrollview.dart');
+final _log = textFieldLog;
 
 /// A scrollable that positions its [child] based on text metrics.
 ///
@@ -142,7 +141,7 @@ class _TextScrollViewState extends State<TextScrollView>
         widget.lineHeight != oldWidget.lineHeight) {
       // Force a new viewport height calculation.
       setState(() {
-        print('Need another viewport height');
+        _log.fine('Need another viewport height');
         _needViewportHeight = true;
       });
     }
@@ -172,8 +171,6 @@ class _TextScrollViewState extends State<TextScrollView>
   @override
   double get endScrollOffset {
     final lastCharacterPosition = TextPosition(offset: widget.textEditingController.text.text.length - 1);
-    print(
-        'End scroll offset. Last character bottom: ${_text.getCharacterBox(lastCharacterPosition).bottom}, viewport height: $viewportHeight');
     return _text.getCharacterBox(lastCharacterPosition).bottom - viewportHeight;
   }
 
@@ -220,7 +217,6 @@ class _TextScrollViewState extends State<TextScrollView>
     // Note: we look for an offset that is slightly further down than zero
     // to avoid any issues with the layout system differentiating between lines.
     final textPositionAtLeftEnd = _text.getPositionNearestToOffset(Offset(_scrollController.offset, 5));
-    print('Position to left: $textPositionAtLeftEnd, current scroll offset: ${_scrollController.offset}');
     final nextPosition = textPositionAtLeftEnd.offset <= 0
         ? textPositionAtLeftEnd
         : TextPosition(offset: textPositionAtLeftEnd.offset - 1);
@@ -234,10 +230,6 @@ class _TextScrollViewState extends State<TextScrollView>
     // to avoid any issues with the layout system differentiating between lines.
     final textPositionAtRightEnd =
         _text.getPositionNearestToOffset(Offset(viewportWidth + _scrollController.offset, 5));
-    print('Position to right: $textPositionAtRightEnd, current scroll offset: ${_scrollController.offset}');
-    print('Current extent: ${widget.textEditingController.selection.extentOffset}');
-    print('Position at right end: ${textPositionAtRightEnd.offset}');
-    print('Length of text: ${widget.textEditingController.text.text.length}');
     final nextPosition = textPositionAtRightEnd.offset >= widget.textEditingController.text.text.length - 1
         ? textPositionAtRightEnd
         : TextPosition(offset: textPositionAtRightEnd.offset + 1);
@@ -256,7 +248,7 @@ class _TextScrollViewState extends State<TextScrollView>
   @override
   double getVerticalOffsetForBottomOfLineBelowViewport() {
     if (_viewportHeight == null) {
-      print('WARNING: Tried to calculate line below viewport but viewportHeight is null');
+      _log.warning('Tried to calculate line below viewport but viewportHeight is null');
       return 0.0;
     }
 
@@ -282,7 +274,7 @@ class _TextScrollViewState extends State<TextScrollView>
 
   /// Returns true if the viewport height changed, false otherwise.
   bool _updateViewportHeight() {
-    print('Updating viewport height...');
+    _log.fine('Updating viewport height...');
     final linesOfText = _getLineCount();
     final estimatedContentHeight = linesOfText * widget.lineHeight!;
     final minHeight = widget.minLines != null ? widget.minLines! * widget.lineHeight! : null;
@@ -296,12 +288,12 @@ class _TextScrollViewState extends State<TextScrollView>
 
     if (!_needViewportHeight && viewportHeight == _viewportHeight) {
       // The height of the viewport hasn't changed. Return.
-      print(' - viewport height hasn\'t changed');
+      _log.fine(' - viewport height hasn\'t changed');
       return false;
     }
 
     setState(() {
-      print(' - new viewport height: $viewportHeight');
+      _log.fine(' - new viewport height: $viewportHeight');
       _needViewportHeight = false;
       _viewportHeight = viewportHeight;
     });
@@ -466,7 +458,7 @@ class TextScrollController with ChangeNotifier {
 
   void jumpToStart() {
     if (_delegate == null) {
-      print("WARNING: Can't calculate start scroll offset. The auto-scroll delegate is null.");
+      _log.warning("Can't calculate start scroll offset. The auto-scroll delegate is null.");
       return;
     }
 
@@ -479,7 +471,7 @@ class TextScrollController with ChangeNotifier {
 
   void jumpToEnd() {
     if (_delegate == null) {
-      print("WARNING: Can't calculate end scroll offset. The auto-scroll delegate is null.");
+      _log.warning("Can't calculate end scroll offset. The auto-scroll delegate is null.");
       return;
     }
 
@@ -494,7 +486,7 @@ class TextScrollController with ChangeNotifier {
     required Offset userInteractionOffsetInViewport,
   }) {
     if (_delegate == null) {
-      print("WARNING: Can't auto-scroll. The auto-scroll delegate is null.");
+      _log.warning("Can't auto-scroll. The auto-scroll delegate is null.");
       return;
     }
 
@@ -521,7 +513,7 @@ class TextScrollController with ChangeNotifier {
 
     stopScrolling();
 
-    _log.log('autoscroll', 'Auto-scrolling to start');
+    _log.fine('Auto-scrolling to start');
     _autoScrollDirection = _AutoScrollDirection.start;
     _autoScrollTick(Duration.zero);
     _ticker.start();
@@ -538,11 +530,10 @@ class TextScrollController with ChangeNotifier {
       // Already scrolling to start. Return.
       return;
     }
-    _log.log('autoscroll', 'starting to scroll to end');
 
     stopScrolling();
 
-    _log.log('autoscroll', 'Auto-scrolling to end');
+    _log.fine('Auto-scrolling to end');
     _autoScrollDirection = _AutoScrollDirection.end;
     _autoScrollTick(Duration.zero);
     _ticker.start();
@@ -550,7 +541,7 @@ class TextScrollController with ChangeNotifier {
 
   /// Stops any auto-scrolling that is currently in progress.
   void stopScrolling() {
-    _log.log('autoscroll', 'stopping auto-scroll');
+    _log.fine('stopping auto-scroll');
     _autoScrollDirection = null;
     _timeOfNextAutoScroll = Duration.zero;
     _ticker.stop();
@@ -563,13 +554,13 @@ class TextScrollController with ChangeNotifier {
   /// auto scroll movement.
   void _autoScrollTick(Duration elapsedTime) {
     if (_delegate == null) {
-      print('WARNING: auto-scroll delegate was null in _autoScrollTick()');
+      _log.warning('auto-scroll delegate was null in _autoScrollTick()');
       stopScrolling();
       return;
     }
 
     if (_autoScrollDirection == null) {
-      print('WARNING: _autoScrollDirection was null in _autoScrollTick()');
+      _log.warning('_autoScrollDirection was null in _autoScrollTick()');
       stopScrolling();
       return;
     }
@@ -578,8 +569,7 @@ class TextScrollController with ChangeNotifier {
       return;
     }
 
-    _log.log(
-        'autoscroll', 'auto-scroll tick, is multiline: ${_delegate!.isMultiline}, direction: $_autoScrollDirection');
+    _log.finer('auto-scroll tick, is multiline: ${_delegate!.isMultiline}, direction: $_autoScrollDirection');
     final offsetBeforeScroll = _scrollOffset;
 
     if (_delegate!.isMultiline) {
@@ -598,7 +588,7 @@ class TextScrollController with ChangeNotifier {
     }
 
     if (_scrollOffset == offsetBeforeScroll) {
-      print('Offset did not change during tick. Stopping scroll.');
+      _log.fine('Offset did not change during tick. Stopping scroll.');
       // We've reached the desired start or end. Stop auto-scrolling.
       stopScrolling();
     }
@@ -606,11 +596,11 @@ class TextScrollController with ChangeNotifier {
 
   void _autoScrollOneCharacterLeft() {
     if (_delegate == null) {
-      print("WARNING: Can't auto-scroll left. The scroll delegate is null.");
+      _log.warning("Can't auto-scroll left. The scroll delegate is null.");
       return;
     }
 
-    print('_autoScrollOneCharacterLeft. Scroll offset before: $scrollOffset');
+    _log.fine('_autoScrollOneCharacterLeft. Scroll offset before: $scrollOffset');
     _scrollOffset = _delegate!.getHorizontalOffsetForStartOfCharacterLeftOfViewport();
     _timeOfNextAutoScroll += _autoScrollTimePerCharacter;
 
@@ -619,11 +609,11 @@ class TextScrollController with ChangeNotifier {
 
   void _autoScrollOneCharacterRight() {
     if (_delegate == null) {
-      print("WARNING: Can't auto-scroll right. The scroll delegate is null.");
+      _log.warning("Can't auto-scroll right. The scroll delegate is null.");
       return;
     }
 
-    print('Scrolling right');
+    _log.fine('Scrolling right');
     _scrollOffset = _delegate!.getHorizontalOffsetForEndOfCharacterRightOfViewport() - _delegate!.viewportWidth;
     _timeOfNextAutoScroll += _autoScrollTimePerCharacter;
 
@@ -634,7 +624,7 @@ class TextScrollController with ChangeNotifier {
   /// visible at the top of the viewport, if a line is available.
   void _autoScrollOneLineUp() {
     if (_delegate == null) {
-      print("WARNING: Can't auto-scroll up. The scroll delegate is null.");
+      _log.warning("Can't auto-scroll up. The scroll delegate is null.");
       return;
     }
 
@@ -648,12 +638,12 @@ class TextScrollController with ChangeNotifier {
   /// visible at the bottom of the viewport, if a line is available.
   void _autoScrollOneLineDown() {
     if (_delegate == null) {
-      print("WARNING: Can't auto-scroll down. The scroll delegate is null.");
+      _log.warning("Can't auto-scroll down. The scroll delegate is null.");
       return;
     }
 
     final newOffset = _delegate!.getVerticalOffsetForBottomOfLineBelowViewport() - _delegate!.viewportHeight;
-    _log.log('autoscroll', 'Scrolling down. New offset: $newOffset');
+    _log.fine('Scrolling down. New offset: $newOffset');
 
     _scrollOffset = newOffset;
     _timeOfNextAutoScroll += _autoScrollTimePerLine;
@@ -667,7 +657,7 @@ class TextScrollController with ChangeNotifier {
   /// Does nothing if the base position is already visible.
   void ensureBaseIsVisible() {
     if (_delegate == null) {
-      print("WARNING: Can't make base selection visible. The scroll delegate is null.");
+      _log.warning("Can't make base selection visible. The scroll delegate is null.");
       return;
     }
 
@@ -686,7 +676,7 @@ class TextScrollController with ChangeNotifier {
   /// Does nothing if the extent position is already visible.
   void ensureExtentIsVisible() {
     if (_delegate == null) {
-      print("WARNING: Can't make extent selection visible. The scroll delegate is null.");
+      _log.warning("Can't make extent selection visible. The scroll delegate is null.");
       return;
     }
 
