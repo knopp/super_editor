@@ -67,7 +67,7 @@ class AndroidEditingOverlayControls extends StatefulWidget {
   _AndroidEditingOverlayControlsState createState() => _AndroidEditingOverlayControlsState();
 }
 
-class _AndroidEditingOverlayControlsState extends State<AndroidEditingOverlayControls> {
+class _AndroidEditingOverlayControlsState extends State<AndroidEditingOverlayControls> with WidgetsBindingObserver {
   // These global keys are assigned to each draggable handle to
   // prevent a strange dragging issue.
   //
@@ -100,11 +100,27 @@ class _AndroidEditingOverlayControlsState extends State<AndroidEditingOverlayCon
   @override
   void initState() {
     super.initState();
+
+    WidgetsBinding.instance!.addObserver(this);
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance!.removeObserver(this);
+
     super.dispose();
+  }
+
+  @override
+  void didChangeMetrics() {
+    // The available screen dimensions may have changed, e.g., due to keyboard
+    // appearance/disappearance. Reflow the layout. Use a post-frame callback
+    // to give the rest of the UI a chance to reflow, first.
+    WidgetsBinding.instance!.addPostFrameCallback((timeStamp) {
+      setState(() {
+        // no-op
+      });
+    });
   }
 
   void _onCollapsedPanStart(DragStartDetails details) {

@@ -68,7 +68,7 @@ class IOSEditingControls extends StatefulWidget {
   _IOSEditingControlsState createState() => _IOSEditingControlsState();
 }
 
-class _IOSEditingControlsState extends State<IOSEditingControls> {
+class _IOSEditingControlsState extends State<IOSEditingControls> with WidgetsBindingObserver {
   // These global keys are assigned to each draggable handle to
   // prevent a strange dragging issue.
   //
@@ -93,11 +93,27 @@ class _IOSEditingControlsState extends State<IOSEditingControls> {
   @override
   void initState() {
     super.initState();
+
+    WidgetsBinding.instance!.addObserver(this);
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance!.removeObserver(this);
+
     super.dispose();
+  }
+
+  @override
+  void didChangeMetrics() {
+    // The available screen dimensions may have changed, e.g., due to keyboard
+    // appearance/disappearance. Reflow the layout. Use a post-frame callback
+    // to give the rest of the UI a chance to reflow, first.
+    WidgetsBinding.instance!.addPostFrameCallback((timeStamp) {
+      setState(() {
+        // no-op
+      });
+    });
   }
 
   void _onBasePanStart(DragStartDetails details) {
