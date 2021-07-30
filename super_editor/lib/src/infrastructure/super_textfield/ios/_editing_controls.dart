@@ -4,11 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:super_editor/src/infrastructure/_listenable_builder.dart';
 import 'package:super_editor/src/infrastructure/super_selectable_text.dart';
 import 'package:super_editor/src/infrastructure/super_textfield/infrastructure/text_scrollview.dart';
+import 'package:super_editor/src/infrastructure/super_textfield/infrastructure/toolbar_position_delegate.dart';
 import 'package:super_editor/src/infrastructure/super_textfield/ios/_magnifier.dart';
 import 'package:super_editor/src/infrastructure/super_textfield/super_textfield.dart';
 
 import '_handles.dart';
-import '../infrastructure/magnifier.dart';
 import '_toolbar.dart';
 
 /// Overlay editing controls for an iOS-style text field.
@@ -335,7 +335,7 @@ class _IOSEditingControlsState extends State<IOSEditingControls> {
         CompositedTransformFollower(
           link: widget.textFieldLayerLink,
           child: CustomSingleChildLayout(
-            delegate: _ToolbarPositionDelegate(
+            delegate: ToolbarPositionDelegate(
               textFieldGlobalOffset: textFieldGlobalOffset,
               desiredTopAnchorInTextField: toolbarTopAnchor,
               desiredBottomAnchorInTextField: toolbarBottomAnchor,
@@ -584,49 +584,5 @@ class IOSEditingOverlayController with ChangeNotifier {
   void hideSelectionHandles() {
     _areSelectionHandlesVisible = false;
     notifyListeners();
-  }
-}
-
-class _ToolbarPositionDelegate extends SingleChildLayoutDelegate {
-  _ToolbarPositionDelegate({
-    required this.textFieldGlobalOffset,
-    required this.desiredTopAnchorInTextField,
-    required this.desiredBottomAnchorInTextField,
-  });
-
-  final Offset textFieldGlobalOffset;
-  final Offset desiredTopAnchorInTextField;
-  final Offset desiredBottomAnchorInTextField;
-
-  @override
-  Offset getPositionForChild(Size size, Size childSize) {
-    final fitsAboveTextField = (textFieldGlobalOffset.dy + desiredTopAnchorInTextField.dy) > 100;
-    final desiredAnchor = fitsAboveTextField
-        ? desiredTopAnchorInTextField
-        : (desiredBottomAnchorInTextField + Offset(0, childSize.height));
-
-    final desiredTopLeft = desiredAnchor - Offset(childSize.width / 2, childSize.height);
-
-    double x = max(desiredTopLeft.dx, -textFieldGlobalOffset.dx);
-    x = min(x, size.width - childSize.width - textFieldGlobalOffset.dx);
-
-    final constrainedOffset = Offset(x, desiredTopLeft.dy);
-
-    // print('ToolbarPositionDelegate:');
-    // print(' - available space: $size');
-    // print(' - child size: $childSize');
-    // print(' - text field offset: $textFieldGlobalOffset');
-    // print(' - ideal y-position: ${textFieldGlobalOffset.dy + desiredTopAnchorInTextField.dy}');
-    // print(' - fits above text field: $fitsAboveTextField');
-    // print(' - desired anchor: $desiredAnchor');
-    // print(' - desired top left: $desiredTopLeft');
-    // print(' - actual offset: $constrainedOffset');
-
-    return constrainedOffset;
-  }
-
-  @override
-  bool shouldRelayout(covariant SingleChildLayoutDelegate oldDelegate) {
-    return true;
   }
 }
