@@ -98,12 +98,15 @@ class _SuperIOSTextfieldDemoState extends State<SuperIOSTextfieldDemo> {
         maxLines = 1;
         break;
       case TextFieldSizeMode.short:
-        maxLines = 4;
+        maxLines = 5;
         break;
       case TextFieldSizeMode.tall:
         // no-op
         break;
     }
+
+    final genericTextStyle = _styleBuilder({});
+    final lineHeight = genericTextStyle.fontSize! * (genericTextStyle.height ?? 1.0);
 
     return SuperIOSTextfield(
       textController: _textController,
@@ -112,6 +115,7 @@ class _SuperIOSTextfieldDemoState extends State<SuperIOSTextfieldDemo> {
       controlsColor: Colors.blue,
       minLines: minLines,
       maxLines: maxLines,
+      lineHeight: lineHeight,
       textInputAction: TextInputAction.done,
       showDebugPaint: _showDebugPaint,
     );

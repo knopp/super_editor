@@ -36,9 +36,10 @@ class _EditTextDemoState extends State<EditTextDemo> {
                   IntrinsicHeight(
                     child: TextField(
                       controller: _textController,
+                      scrollPadding: EdgeInsets.all(48),
                       expands: false,
                       minLines: null,
-                      maxLines: 5,
+                      maxLines: 1,
                     ),
                   ),
                   // SizedBox(height: 325),

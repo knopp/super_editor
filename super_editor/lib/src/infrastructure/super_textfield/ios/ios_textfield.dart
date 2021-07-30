@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:super_editor/src/default_editor/super_editor.dart';
 import 'package:super_editor/src/infrastructure/_listenable_builder.dart';
 import 'package:super_editor/src/infrastructure/super_textfield/ios/_editing_controls.dart';
+import 'package:super_editor/src/infrastructure/super_textfield/ios/_text_scrollview.dart';
 
 import '../../attributed_text.dart';
 import '../../super_selectable_text.dart';
@@ -30,11 +31,14 @@ class SuperIOSTextfield extends StatefulWidget {
     this.textStyleBuilder = defaultStyleBuilder,
     this.minLines,
     this.maxLines = 1,
+    this.lineHeight,
     this.padding = EdgeInsets.zero,
     this.textInputAction = TextInputAction.done,
     this.showDebugPaint = false,
     this.onPerformActionPressed,
-  }) : super(key: key);
+  })  : assert(minLines == null || minLines == 1 || lineHeight != null, 'minLines > 1 requires a non-null lineHeight'),
+        assert(maxLines == null || maxLines == 1 || lineHeight != null, 'maxLines > 1 requires a non-null lineHeight'),
+        super(key: key);
 
   final FocusNode? focusNode;
 
@@ -46,8 +50,44 @@ class SuperIOSTextfield extends StatefulWidget {
 
   final Color controlsColor;
 
+  /// The minimum height of this text field, represented as a
+  /// line count.
+  ///
+  /// If [minLines] is non-null and greater than `1`, [lineHeight]
+  /// must also be provided because there is no guarantee that all
+  /// lines of text have the same height.
+  ///
+  /// See also:
+  ///
+  ///  * [maxLines]
+  ///  * [lineHeight]
   final int? minLines;
+
+  /// The maximum height of this text field, represented as a
+  /// line count.
+  ///
+  /// If text exceeds the maximum line height, scrolling dynamics
+  /// are added to accommodate the overflowing text.
+  ///
+  /// If [maxLines] is non-null and greater than `1`, [lineHeight]
+  /// must also be provided because there is no guarantee that all
+  /// lines of text have the same height.
+  ///
+  /// See also:
+  ///
+  ///  * [minLines]
+  ///  * [lineHeight]
   final int? maxLines;
+
+  /// The height of a single line of text in this text field, used
+  /// with [minLines] and [maxLines] to size the text field.
+  ///
+  /// An explicit [lineHeight] is required because rich text in this
+  /// text field might have lines of varying height, which would
+  /// result in a constantly changing text field height during scrolling.
+  /// To avoid that situation, a single, explicit [lineHeight] is
+  /// provided and used for all text field height calculations.
+  final double? lineHeight;
 
   final EdgeInsets padding;
 
@@ -63,11 +103,13 @@ class SuperIOSTextfield extends StatefulWidget {
   _SuperIOSTextfieldState createState() => _SuperIOSTextfieldState();
 }
 
-class _SuperIOSTextfieldState extends State<SuperIOSTextfield> implements TextInputClient {
+class _SuperIOSTextfieldState extends State<SuperIOSTextfield>
+    with SingleTickerProviderStateMixin
+    implements TextInputClient {
   final _textFieldKey = GlobalKey();
   final _textFieldLayerLink = LayerLink();
   final _textContentLayerLink = LayerLink();
-  final _scrollKey = GlobalKey<IOSTextfieldInteractorState>();
+  final _scrollKey = GlobalKey<IOSTextFieldTouchInteractorState>();
   final _textContentKey = GlobalKey<SuperSelectableTextState>();
 
   late FocusNode _focusNode;
@@ -79,9 +121,7 @@ class _SuperIOSTextfieldState extends State<SuperIOSTextfield> implements TextIn
   final _magnifierLayerLink = LayerLink();
   late IOSEditingOverlayController _editingOverlayController;
 
-  bool _needViewportHeight = true;
-  double? _viewportHeight;
-  final ScrollController _scrollController = ScrollController();
+  late TextScrollController _textScrollController;
 
   // OverlayEntry that displays the toolbar and magnifier, and
   // positions the invisible touch targets for base/extent
@@ -101,7 +141,10 @@ class _SuperIOSTextfieldState extends State<SuperIOSTextfield> implements TextIn
     _textEditingController = (widget.textController ?? AttributedTextEditingController())
       ..addListener(_sendEditingValueToPlatform);
 
-    _scrollController.addListener(_onTextScrollChange);
+    _textScrollController = TextScrollController(
+      textController: _textEditingController,
+      tickerProvider: this,
+    )..addListener(_onTextScrollChange);
 
     _floatingCursorController = FloatingCursorController(
       textController: _textEditingController,
@@ -111,6 +154,8 @@ class _SuperIOSTextfieldState extends State<SuperIOSTextfield> implements TextIn
       textController: _textEditingController,
       magnifierFocalPoint: _magnifierLayerLink,
     );
+
+    // _testAutoScrolling();
   }
 
   @override
@@ -144,11 +189,6 @@ class _SuperIOSTextfieldState extends State<SuperIOSTextfield> implements TextIn
       _sendEditingValueToPlatform();
     }
 
-    if (widget.minLines != oldWidget.minLines || widget.maxLines != oldWidget.maxLines) {
-      // Force a new viewport height calculation.
-      _needViewportHeight = true;
-    }
-
     if (widget.showDebugPaint != oldWidget.showDebugPaint) {
       WidgetsBinding.instance!.addPostFrameCallback((timeStamp) {
         _rebuildHandles();
@@ -180,14 +220,14 @@ class _SuperIOSTextfieldState extends State<SuperIOSTextfield> implements TextIn
       _textEditingController.dispose();
     }
 
-    _scrollController.removeListener(_onTextScrollChange);
-
     _focusNode.removeListener(_onFocusChange);
     if (widget.focusNode == null) {
       _focusNode.dispose();
     }
 
-    _scrollController.dispose();
+    _textScrollController
+      ..removeListener(_onTextScrollChange)
+      ..dispose();
 
     super.dispose();
   }
@@ -235,6 +275,7 @@ class _SuperIOSTextfieldState extends State<SuperIOSTextfield> implements TextIn
       _controlsOverlayEntry = OverlayEntry(builder: (overlayContext) {
         return IOSEditingControls(
           editingController: _editingOverlayController,
+          textScrollController: _textScrollController,
           textFieldLayerLink: _textFieldLayerLink,
           textFieldKey: _textFieldKey,
           textContentLayerLink: _textContentLayerLink,
@@ -329,134 +370,77 @@ class _SuperIOSTextfieldState extends State<SuperIOSTextfield> implements TextIn
     _textInputConnection = null;
   }
 
-  /// Returns true if the viewport height changed, false otherwise.
-  bool _updateViewportHeight() {
-    final estimatedLineHeight = _getEstimatedLineHeight();
-    final estimatedLinesOfText = _getEstimatedLinesOfText();
-    final estimatedContentHeight = estimatedLinesOfText * estimatedLineHeight;
-    final minHeight = widget.minLines != null ? widget.minLines! * estimatedLineHeight + widget.padding.vertical : null;
-    final maxHeight = widget.maxLines != null ? widget.maxLines! * estimatedLineHeight + widget.padding.vertical : null;
-    double? viewportHeight;
-    if (maxHeight != null && estimatedContentHeight > maxHeight) {
-      viewportHeight = maxHeight;
-    } else if (minHeight != null && estimatedContentHeight < minHeight) {
-      viewportHeight = minHeight;
-    }
-
-    if (!_needViewportHeight && viewportHeight == _viewportHeight) {
-      // The height of the viewport hasn't changed. Return.
-      return false;
-    }
-
-    setState(() {
-      _needViewportHeight = false;
-      _viewportHeight = viewportHeight;
-    });
-
-    return true;
-  }
-
-  int _getEstimatedLinesOfText() {
-    if (_textEditingController.text.text.isEmpty) {
-      return 0;
-    }
-
-    if (_textContentKey.currentState == null) {
-      return 0;
-    }
-
-    final offsetAtEndOfText = _textContentKey.currentState!
-        .getOffsetAtPosition(TextPosition(offset: _textEditingController.text.text.length));
-    int lineCount = (offsetAtEndOfText.dy / _getEstimatedLineHeight()).ceil();
-
-    if (_textEditingController.text.text.endsWith('\n')) {
-      lineCount += 1;
-    }
-
-    return lineCount;
-  }
-
-  double _getEstimatedLineHeight() {
-    final defaultStyle = widget.textStyleBuilder({});
-    return (defaultStyle.height ?? 1.0) * defaultStyle.fontSize!;
-  }
-
   @override
   Widget build(BuildContext context) {
-    if (_textContentKey.currentContext == null || _needViewportHeight) {
-      // The text hasn't been laid out yet, which means our calculations
-      // for text height is probably wrong. Schedule a post frame callback
-      // to re-calculate the height after initial layout.
-      WidgetsBinding.instance!.addPostFrameCallback((timeStamp) {
-        if (mounted) {
-          setState(() {
-            _updateViewportHeight();
-          });
-        }
-      });
-    }
-
     return Focus(
       key: _textFieldKey,
       focusNode: _focusNode,
       child: CompositedTransformTarget(
         link: _textFieldLayerLink,
-        child: IOSTextfieldInteractor(
-          key: _scrollKey,
+        child: IOSTextFieldTouchInteractor(
           focusNode: _focusNode,
           selectableTextKey: _textContentKey,
-          scrollKey: _scrollKey,
           textFieldLayerLink: _textFieldLayerLink,
           textController: _textEditingController,
-          editingController: _editingOverlayController,
-          scrollController: _scrollController,
-          viewportHeight: _viewportHeight,
+          editingOverlayController: _editingOverlayController,
+          textScrollController: _textScrollController,
           isMultiline: _isMultiline,
           handleColor: widget.controlsColor,
           showDebugPaint: widget.showDebugPaint,
-          child: ListenableBuilder(
-            listenable: _textEditingController,
-            builder: (context) {
-              final textSpan = _textEditingController.text.text.isNotEmpty
-                  ? _textEditingController.text.computeTextSpan(widget.textStyleBuilder)
-                  : AttributedText(text: 'enter text').computeTextSpan(
-                      (attributions) => widget.textStyleBuilder(attributions).copyWith(color: Colors.grey));
+          child: Padding(
+            padding: widget.padding,
+            child: TextScrollView(
+              key: _scrollKey,
+              textScrollController: _textScrollController,
+              textKey: _textContentKey,
+              textEditingController: _textEditingController,
+              minLines: widget.minLines,
+              maxLines: widget.maxLines,
+              lineHeight: widget.lineHeight,
+              showDebugPaint: widget.showDebugPaint,
+              child: ListenableBuilder(
+                listenable: _textEditingController,
+                builder: (context) {
+                  final textSpan = _textEditingController.text.text.isNotEmpty
+                      ? _textEditingController.text.computeTextSpan(widget.textStyleBuilder)
+                      : AttributedText(text: 'enter text').computeTextSpan(
+                          (attributions) => widget.textStyleBuilder(attributions).copyWith(color: Colors.grey));
 
-              return CompositedTransformTarget(
-                link: _textContentLayerLink,
-                child: Padding(
-                  padding: widget.padding,
-                  child: Stack(
-                    children: [
-                      // TODO: switch out textSelectionDecoration and textCaretFactory
-                      //       for backgroundBuilders and foregroundBuilders, respectively
-                      //
-                      //       add the floating cursor as a foreground builder
-                      SuperSelectableText(
-                        key: _textContentKey,
-                        textSpan: textSpan,
-                        textSelection: _textEditingController.selection,
-                        textSelectionDecoration: TextSelectionDecoration(selectionColor: widget.selectionColor),
-                        showCaret: true,
-                        textCaretFactory: IOSTextFieldCaretFactory(
-                          color: _floatingCursorController.isShowingFloatingCursor ? Colors.grey : widget.controlsColor,
-                          width: 2,
+                  return CompositedTransformTarget(
+                    link: _textContentLayerLink,
+                    child: Stack(
+                      children: [
+                        // TODO: switch out textSelectionDecoration and textCaretFactory
+                        //       for backgroundBuilders and foregroundBuilders, respectively
+                        //
+                        //       add the floating cursor as a foreground builder
+                        SuperSelectableText(
+                          key: _textContentKey,
+                          textSpan: textSpan,
+                          textSelection: _textEditingController.selection,
+                          textSelectionDecoration: TextSelectionDecoration(selectionColor: widget.selectionColor),
+                          showCaret: true,
+                          textCaretFactory: IOSTextFieldCaretFactory(
+                            color:
+                                _floatingCursorController.isShowingFloatingCursor ? Colors.grey : widget.controlsColor,
+                            width: 2,
+                          ),
                         ),
-                      ),
-                      Positioned(
-                        left: 0,
-                        top: 0,
-                        right: 0,
-                        bottom: 0,
-                        child: IOSFloatingCursor(
-                          controller: _floatingCursorController,
+                        Positioned(
+                          left: 0,
+                          top: 0,
+                          right: 0,
+                          bottom: 0,
+                          child: IOSFloatingCursor(
+                            controller: _floatingCursorController,
+                          ),
                         ),
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            },
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ),
           ),
         ),
       ),

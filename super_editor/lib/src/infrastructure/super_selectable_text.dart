@@ -208,7 +208,34 @@ class SuperSelectableTextState extends State<SuperSelectableText> implements Tex
       return 0.0;
     }
 
-    return _renderParagraph!.getFullHeightForCaret(position) ?? 0;
+    final lineHeightMultiplier = widget.richText.style?.height ?? 1.0;
+
+    // If no text is currently displayed, we can't use a character box
+    // to measure, but we may be able to use the caret height.
+    if (widget.richText.text == null) {
+      return (_renderParagraph!.getFullHeightForCaret(position) ?? 0) * lineHeightMultiplier;
+    }
+
+    // There is some text in this layout. Get the bounding box for the
+    // character at the given position and return its height.
+    return getCharacterBox(position).toRect().height * lineHeightMultiplier;
+  }
+
+  @override
+  int getLineCount() {
+    if (_renderParagraph == null) {
+      throw Exception('SelectableText does not yet have a RenderParagraph. Can\'t getBoxesForSelection().');
+    }
+    if (kDebugMode && _renderParagraph!.debugNeedsLayout) {
+      return 0;
+    }
+
+    return _renderParagraph!
+        .getBoxesForSelection(TextSelection(
+          baseOffset: 0,
+          extentOffset: widget.richText.text?.length ?? 0,
+        ))
+        .length;
   }
 
   @override
@@ -244,10 +271,14 @@ class SuperSelectableTextState extends State<SuperSelectableText> implements Tex
       return const TextBox.fromLTRBD(0, 0, 0, 0, TextDirection.ltr);
     }
 
+    final characterPosition = position.offset >= widget.richText.text!.length
+        ? TextPosition(offset: widget.richText.text!.length - 1)
+        : position;
+
     return _renderParagraph!
         .getBoxesForSelection(TextSelection(
-          baseOffset: position.offset,
-          extentOffset: position.offset + 1,
+          baseOffset: characterPosition.offset,
+          extentOffset: characterPosition.offset + 1,
         ))
         .first;
   }

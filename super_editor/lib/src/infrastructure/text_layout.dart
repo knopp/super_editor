@@ -12,6 +12,9 @@ abstract class TextLayout {
   /// Returns the height of the character at the given [position].
   double getLineHeightAtPosition(TextPosition position);
 
+  /// Returns the number of lines of text, given the current text layout.
+  int getLineCount();
+
   /// Returns the [TextPosition] that overlaps the given [localOffset],
   /// or the [TextPosition] that is nearest the given [localOffset] if
   /// no [TextPosition] overlaps the given [localOffset].
