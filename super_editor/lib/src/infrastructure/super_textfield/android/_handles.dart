@@ -7,7 +7,7 @@ class AndroidTextFieldHandle extends StatelessWidget {
     Key? key,
     required this.handleType,
     required this.color,
-    this.radius = 8,
+    this.radius = 10,
   }) : super(key: key);
 
   final AndroidHandleType handleType;

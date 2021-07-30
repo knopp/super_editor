@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
@@ -109,7 +110,9 @@ class _AndroidEditingOverlayControlsState extends State<AndroidEditingOverlayCon
   void _onCollapsedPanStart(DragStartDetails details) {
     print('_onCollapsedPanStart');
 
-    widget.editingController.hideToolbar();
+    widget.editingController
+      ..hideToolbar()
+      ..cancelCollapsedHandleAutoHideCountdown();
 
     // TODO: de-dup the calculation of the mid-line focal point
     final globalOffsetInMiddleOfLine =
@@ -142,7 +145,9 @@ class _AndroidEditingOverlayControlsState extends State<AndroidEditingOverlayCon
         _getGlobalOffsetOfMiddleOfLine(widget.editingController.textController.selection.base);
     _touchHandleOffsetFromLineOfText = globalOffsetInMiddleOfLine - details.globalPosition;
 
-    widget.editingController.hideToolbar();
+    widget.editingController
+      ..hideToolbar()
+      ..cancelCollapsedHandleAutoHideCountdown();
 
     // TODO: de-dup the repeated calculations of the effective focal point: globalPosition + _touchHandleOffsetFromLineOfText
     widget.textScrollController.updateAutoScrollingForTouchOffset(
@@ -170,7 +175,9 @@ class _AndroidEditingOverlayControlsState extends State<AndroidEditingOverlayCon
         _getGlobalOffsetOfMiddleOfLine(widget.editingController.textController.selection.extent);
     _touchHandleOffsetFromLineOfText = globalOffsetInMiddleOfLine - details.globalPosition;
 
-    widget.editingController.hideToolbar();
+    widget.editingController
+      ..hideToolbar()
+      ..cancelCollapsedHandleAutoHideCountdown();
 
     // TODO: de-dup the repeated calculations of the effective focal point: globalPosition + _touchHandleOffsetFromLineOfText
     widget.textScrollController.updateAutoScrollingForTouchOffset(
@@ -248,6 +255,11 @@ class _AndroidEditingOverlayControlsState extends State<AndroidEditingOverlayCon
 
       if (!widget.editingController.textController.selection.isCollapsed) {
         widget.editingController.showToolbar();
+      } else {
+        // The collapsed handle should disappear after some inactivity.
+        widget.editingController
+          ..unHideCollapsedHandle()
+          ..startCollapsedHandleAutoHideCountdown();
       }
     });
   }
@@ -567,9 +579,16 @@ class _AndroidEditingOverlayControlsState extends State<AndroidEditingOverlayCon
           child: Container(
             color: widget.showDebugPaint ? Colors.green : Colors.transparent,
             child: showHandle
-                ? AndroidTextFieldHandle(
-                    handleType: handleType,
-                    color: widget.handleColor,
+                ? AnimatedOpacity(
+                    opacity: handleType == AndroidHandleType.collapsed &&
+                            widget.editingController.isCollapsedHandleAutoHidden
+                        ? 0.0
+                        : 1.0,
+                    duration: const Duration(milliseconds: 150),
+                    child: AndroidTextFieldHandle(
+                      handleType: handleType,
+                      color: widget.handleColor,
+                    ),
                   )
                 : const SizedBox(),
           ),
@@ -705,6 +724,41 @@ class AndroidEditingOverlayController with ChangeNotifier {
   void hideHandles() {
     if (_areHandlesVisible) {
       _areHandlesVisible = false;
+      cancelCollapsedHandleAutoHideCountdown();
+      notifyListeners();
+    }
+  }
+
+  // The collapsed handle is auto-hidden on Android after a period of inactivity.
+  // We represent the auto-hidden status of the collapsed handle independently
+  // from the general visibility of all handles. This way, the expanded handles
+  // are not inadvertently hidden due to the collapsed handle being hidden. Also,
+  // this allows for fading out of the collapsed handle, rather than the abrupt
+  // disappearance of all handles.
+  final Duration _handleAutoHideDuration = const Duration(seconds: 4);
+  Timer? _handleAutoHideTimer;
+  bool _isCollapsedHandleAutoHidden = false;
+  bool get isCollapsedHandleAutoHidden => _isCollapsedHandleAutoHidden;
+
+  void unHideCollapsedHandle() {
+    if (_isCollapsedHandleAutoHidden) {
+      _isCollapsedHandleAutoHidden = false;
+      notifyListeners();
+    }
+  }
+
+  void startCollapsedHandleAutoHideCountdown() {
+    _handleAutoHideTimer?.cancel();
+    _handleAutoHideTimer = Timer(_handleAutoHideDuration, _hideCollapsedHandle);
+  }
+
+  void cancelCollapsedHandleAutoHideCountdown() {
+    _handleAutoHideTimer?.cancel();
+  }
+
+  void _hideCollapsedHandle() {
+    if (!_isCollapsedHandleAutoHidden) {
+      _isCollapsedHandleAutoHidden = true;
       notifyListeners();
     }
   }

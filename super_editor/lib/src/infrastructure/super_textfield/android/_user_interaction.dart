@@ -143,6 +143,9 @@ class AndroidTextFieldTouchInteractorState extends State<AndroidTextFieldTouchIn
     // preemptively.
     widget.editingOverlayController.hideToolbar();
 
+    // Ensure that the collapsed handle is not auto-hidden.
+    widget.editingOverlayController.unHideCollapsedHandle();
+
     _selectionBeforeSingleTapDown = widget.textController.selection;
 
     final tapTextPosition = _getTextPositionAtOffset(details.localPosition);
@@ -188,6 +191,12 @@ class AndroidTextFieldTouchInteractorState extends State<AndroidTextFieldTouchIn
       // Hide the toolbar.
       widget.editingOverlayController.hideToolbar();
     }
+
+    // On Android, the collapsed handle should disappear after a few seconds
+    // of inactivity.
+    widget.editingOverlayController
+      ..unHideCollapsedHandle()
+      ..startCollapsedHandleAutoHideCountdown();
   }
 
   void _onDoubleTapDown(TapDownDetails details) {
@@ -208,6 +217,13 @@ class AndroidTextFieldTouchInteractorState extends State<AndroidTextFieldTouchIn
 
         if (!wordSelection.isCollapsed) {
           widget.editingOverlayController.showToolbar();
+        } else {
+          // The selection is collapsed. The collapsed handle should disappear
+          // after some inactivity. Start the countdown (or restart an in-progress
+          // countdown).
+          widget.editingOverlayController
+            ..unHideCollapsedHandle()
+            ..startCollapsedHandleAutoHideCountdown();
         }
       });
     }
@@ -218,6 +234,15 @@ class AndroidTextFieldTouchInteractorState extends State<AndroidTextFieldTouchIn
 
     widget.textController.selection = widget.selectableTextKey.currentState!
         .expandSelection(tapTextPosition, paragraphExpansionFilter, TextAffinity.downstream);
+
+    if (widget.textController.selection.isCollapsed) {
+      // The selection is collapsed. The collapsed handle should disappear
+      // after some inactivity. Start the countdown (or restart an in-progress
+      // countdown).
+      widget.editingOverlayController
+        ..unHideCollapsedHandle()
+        ..startCollapsedHandleAutoHideCountdown();
+    }
   }
 
   void _onTextPanStart(DragStartDetails details) {
@@ -226,6 +251,9 @@ class AndroidTextFieldTouchInteractorState extends State<AndroidTextFieldTouchIn
       _isDraggingCaret = true;
       _globalDragOffset = details.globalPosition;
       _dragOffset = details.localPosition;
+
+      // Cancel any ongoing handle auto-disappear timer.
+      widget.editingOverlayController.cancelCollapsedHandleAutoHideCountdown();
     });
   }
 
@@ -274,6 +302,13 @@ class AndroidTextFieldTouchInteractorState extends State<AndroidTextFieldTouchIn
 
       if (!widget.textController.selection.isCollapsed) {
         widget.editingOverlayController.showToolbar();
+      } else {
+        // The selection is collapsed. The collapsed handle should disappear
+        // after some inactivity. Start the countdown (or restart an in-progress
+        // countdown).
+        widget.editingOverlayController
+          ..unHideCollapsedHandle()
+          ..startCollapsedHandleAutoHideCountdown();
       }
     });
   }
