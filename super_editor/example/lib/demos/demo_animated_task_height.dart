@@ -119,14 +119,18 @@ class _AnimatedTaskComponentState extends State<_AnimatedTaskComponent>
   @override
   TextComposable get childTextComposable => childDocumentComponentKey.currentState as TextComposable;
 
+  int _counter = 0;
+
   @override
   Widget build(BuildContext context) {
+    ++_counter;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            Text('Rebuild count $_counter'),
             Padding(
               padding: const EdgeInsets.only(left: 16, right: 4),
               child: Checkbox(
