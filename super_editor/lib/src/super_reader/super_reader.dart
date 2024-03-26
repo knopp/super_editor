@@ -393,6 +393,7 @@ class SuperReaderState extends State<SuperReader> {
           child: _buildPlatformSpecificViewportDecorations(
             controlsScopeContext,
             child: DocumentScaffold(
+              documentSelection: _selection,
               documentLayoutLink: _documentLayoutLink,
               documentLayoutKey: _docLayoutKey,
               gestureBuilder: _buildGestureInteractor,

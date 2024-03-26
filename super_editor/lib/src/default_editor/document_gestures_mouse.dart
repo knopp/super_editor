@@ -200,7 +200,7 @@ class _DocumentMouseInteractorState extends State<DocumentMouseInteractor> with 
     final node = widget.document.getNodeById(selection.extent.nodeId);
     if (node is BlockNode) {
       // We don't want auto-scroll block components.
-      return;
+      //return;
     }
 
     // Use a post-frame callback to "ensure selection extent is visible"
@@ -209,9 +209,17 @@ class _DocumentMouseInteractorState extends State<DocumentMouseInteractor> with 
     onNextFrame((_) {
       editorGesturesLog.finer("Ensuring selection extent is visible because the doc selection changed");
 
-      final globalExtentRect = _getSelectionExtentAsGlobalRect();
-      if (globalExtentRect != null) {
-        widget.autoScroller.ensureGlobalRectIsVisible(globalExtentRect);
+      final layout = _docLayout;
+      if (layout is ScrollableDocumentLayout) {
+        final selection = _currentSelection;
+        if (selection != null) {
+          layout.ensureVisible(selection.extent);
+        }
+      } else {
+        final globalExtentRect = _getSelectionExtentAsGlobalRect();
+        if (globalExtentRect != null) {
+          widget.autoScroller.ensureGlobalRectIsVisible(globalExtentRect);
+        }
       }
     });
   }
@@ -333,6 +341,7 @@ class _DocumentMouseInteractorState extends State<DocumentMouseInteractor> with 
         // select by word when moving upstream or downstream from this word.
         _wordSelectionUpstream = widget.selectionNotifier.value!.start;
         _wordSelectionDownstream = widget.selectionNotifier.value!.end;
+        print('Assigning ${_wordSelectionUpstream != null}');
       }
 
       if (!didSelectContent) {
@@ -541,6 +550,7 @@ class _DocumentMouseInteractorState extends State<DocumentMouseInteractor> with 
       return;
     }
     _onDragEnd();
+    _selectionType = SelectionType.position;
   }
 
   void _onPanCancel() {

@@ -2,6 +2,7 @@ import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:super_editor/src/core/document_layout.dart';
 import 'package:super_editor/src/core/edit_context.dart';
@@ -14,6 +15,7 @@ import 'package:super_editor/src/infrastructure/ime_input_owner.dart';
 import 'package:super_editor/src/infrastructure/platforms/ios/ios_document_controls.dart';
 import 'package:super_editor/src/infrastructure/platforms/mac/mac_ime.dart';
 import 'package:super_editor/src/infrastructure/platforms/platform.dart';
+import 'package:super_editor/src/infrastructure/render_object_ext.dart';
 
 import '../document_hardware_keyboard/document_input_keyboard.dart';
 import 'document_delta_editing.dart';
@@ -293,7 +295,7 @@ class SuperEditorImeInteractorState extends State<SuperEditorImeInteractor> impl
       return;
     }
 
-    final myRenderBox = context.findRenderObject() as RenderBox?;
+    final myRenderBox = context.findRenderObject();
     if (myRenderBox != null && myRenderBox.hasSize) {
       _reportSizeAndTransformToIme();
       _reportCaretRectToIme();
@@ -327,7 +329,7 @@ class SuperEditorImeInteractorState extends State<SuperEditorImeInteractor> impl
 
       (size, transform) = sizeAndTransform;
     } else {
-      final renderBox = context.findRenderObject() as RenderBox;
+      final renderBox = context.findRenderObject()!;
 
       size = renderBox.size;
       transform = renderBox.getTransformTo(null);
@@ -422,7 +424,7 @@ class SuperEditorImeInteractorState extends State<SuperEditorImeInteractor> impl
       return null;
     }
 
-    final renderBox = context.findRenderObject() as RenderBox;
+    final renderBox = context.findRenderObject()!;
 
     // The value returned from getRectForPosition is in the document's layout coordinates.
     // As the document layout is scrollable, this rect might be outside of the viewport height.
@@ -459,7 +461,7 @@ class SuperEditorImeInteractorState extends State<SuperEditorImeInteractor> impl
       return null;
     }
 
-    final renderBox = selectedComponent.context.findRenderObject() as RenderBox;
+    final renderBox = selectedComponent.context.findRenderObject()!;
     return (renderBox.size, renderBox.getTransformTo(null));
   }
 

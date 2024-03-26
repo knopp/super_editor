@@ -209,13 +209,13 @@ final _menu = <_MenuGroup>[
   _MenuGroup(
     title: 'Super Editor',
     items: [
-      _MenuItem(
-        icon: Icons.description,
-        title: 'Editor Demo',
-        pageBuilder: (context) {
-          return ExampleEditor();
-        },
-      ),
+      // _MenuItem(
+      //   icon: Icons.description,
+      //   title: 'Editor Demo',
+      //   pageBuilder: (context) {
+      //     return ExampleEditor();
+      //   },
+      // ),
       _MenuItem(
         icon: Icons.description,
         title: 'Sliver Editor Demo',

@@ -103,6 +103,7 @@ class _SuperEditorHardwareKeyHandlerState extends State<SuperEditorHardwareKeyHa
       focusNode: _focusNode,
       onKeyEvent: widget.keyboardActions.isEmpty ? null : _onKeyPressed,
       autofocus: widget.autofocus,
+      includeSemantics: false,
       child: widget.child,
     );
   }

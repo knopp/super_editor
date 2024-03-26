@@ -164,7 +164,10 @@ class CaretDocumentOverlayState extends DocumentLayoutLayerState<CaretDocumentOv
       return null;
     }
 
-    Rect caretRect = documentLayout.getEdgeForPosition(documentSelection.extent)!;
+    Rect? caretRect = documentLayout.getEdgeForPosition(documentSelection.extent);
+    if (caretRect == null) {
+      return null;
+    }
 
     final overlayBox = context.findRenderObject() as RenderBox?;
     if (overlayBox != null && overlayBox.hasSize && caretRect.left + widget.caretStyle.width >= overlayBox.size.width) {

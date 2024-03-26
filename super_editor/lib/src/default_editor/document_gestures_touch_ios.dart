@@ -26,6 +26,7 @@ import 'package:super_editor/src/infrastructure/platforms/ios/magnifier.dart';
 import 'package:super_editor/src/infrastructure/platforms/mobile_documents.dart';
 import 'package:super_editor/src/infrastructure/platforms/platform.dart';
 import 'package:super_editor/src/infrastructure/signal_notifier.dart';
+import 'package:super_editor/src/infrastructure/sliver_hybrid_stack.dart';
 import 'package:super_editor/src/infrastructure/touch_controls.dart';
 
 import '../infrastructure/document_gestures.dart';
@@ -497,7 +498,8 @@ class _IosDocumentTouchInteractorState extends State<IosDocumentTouchInteractor>
   /// space to the [DocumentLayout]'s coordinate space.
   Offset _interactorOffsetToDocumentOffset(Offset interactorOffset) {
     final globalOffset = (context.findRenderObject() as RenderBox).localToGlobal(interactorOffset);
-    return _docLayout.getDocumentOffsetFromAncestorOffset(globalOffset);
+    final res = _docLayout.getDocumentOffsetFromAncestorOffset(globalOffset);
+    return res;
   }
 
   /// Maps the given [interactorOffset] within the interactor's coordinate space
@@ -1390,10 +1392,15 @@ class SuperEditorIosToolbarOverlayManagerState extends State<SuperEditorIosToolb
 
   @override
   Widget build(BuildContext context) {
-    return OverlayPortal(
-      controller: _overlayPortalController,
-      overlayChildBuilder: _buildToolbar,
-      child: widget.child ?? const SizedBox(),
+    return SliverHybridStack(
+      children: [
+        widget.child!,
+        OverlayPortal(
+          controller: _overlayPortalController,
+          overlayChildBuilder: _buildToolbar,
+          child: const SizedBox(),
+        ),
+      ],
     );
   }
 
@@ -1444,10 +1451,15 @@ class SuperEditorIosMagnifierOverlayManagerState extends State<SuperEditorIosMag
 
   @override
   Widget build(BuildContext context) {
-    return OverlayPortal(
-      controller: _overlayPortalController,
-      overlayChildBuilder: _buildMagnifier,
-      child: widget.child ?? const SizedBox(),
+    return SliverHybridStack(
+      children: [
+        widget.child!,
+        OverlayPortal(
+          controller: _overlayPortalController,
+          overlayChildBuilder: _buildMagnifier,
+          child: const SizedBox(),
+        ),
+      ],
     );
   }
 
@@ -1588,7 +1600,9 @@ class _EditorFloatingCursorState extends State<EditorFloatingCursor> {
 
   Offset _viewportOffsetToDocumentOffset(Offset viewportOffset) {
     final globalOffset = viewportBox.localToGlobal(viewportOffset);
-    return _docLayout.getDocumentOffsetFromAncestorOffset(globalOffset);
+    final res = _docLayout.getDocumentOffsetFromAncestorOffset(globalOffset);
+    print('VO $viewportBox, to DO $res');
+    return res;
   }
 
   void _onFloatingCursorStart() {
@@ -1731,10 +1745,14 @@ class _EditorFloatingCursorState extends State<EditorFloatingCursor> {
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
+    return SliverHybridStack(
       children: [
         widget.child,
-        _buildFloatingCursor(),
+        Stack(
+          children: [
+            _buildFloatingCursor(),
+          ],
+        )
       ],
     );
   }

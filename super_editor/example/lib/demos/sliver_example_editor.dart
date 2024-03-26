@@ -11,6 +11,50 @@ class SliverExampleEditor extends StatefulWidget {
   State<SliverExampleEditor> createState() => _SliverExampleEditorState();
 }
 
+class _ScrollBehavior extends ScrollBehavior {
+  const _ScrollBehavior();
+
+  @override
+  ScrollPhysics getScrollPhysics(BuildContext context) {
+    return RangeMaintainingScrollPhysics(parent: super.getScrollPhysics(context));
+  }
+
+  @override
+  TargetPlatform getPlatform(BuildContext context) {
+    // Cupertino scrollbar has broken overscroll, for now force macOS on
+    // all platforms.
+    final platform = super.getPlatform(context);
+    if (platform == TargetPlatform.iOS) {
+      return TargetPlatform.macOS;
+    } else {
+      return platform;
+    }
+  }
+
+  @override
+  Widget buildScrollbar(BuildContext context, Widget child, ScrollableDetails details) {
+    return ScrollbarTheme(
+      data: ScrollbarThemeData(
+        thumbColor: MaterialStateProperty.resolveWith((states) {
+          if (states.contains(MaterialState.hovered) || states.contains(MaterialState.dragged)) {
+            return Colors.black.withOpacity(0.4);
+          }
+          return Colors.black.withOpacity(0.1);
+        }),
+      ),
+      child: MediaQuery(
+        data: MediaQuery.of(context).copyWith(platformBrightness: Brightness.light),
+        child: Scrollbar(
+          controller: details.controller,
+          thumbVisibility: true,
+          thickness: 12.0,
+          child: child,
+        ),
+      ),
+    );
+  }
+}
+
 class _SliverExampleEditorState extends State<SliverExampleEditor> {
   // Toggle this, as a developer, to turn auto-scrolling debug
   // paint on/off.
@@ -48,35 +92,36 @@ class _SliverExampleEditorState extends State<SliverExampleEditor> {
       child: Stack(
         children: [
           Positioned.fill(
-            child: CustomScrollView(
-              key: _scrollableKey,
-              controller: _scrollController,
-              slivers: [
-                SliverAppBar(
-                  title: const Text(
-                    'Rich Text Editor Sliver Example',
-                  ),
-                  expandedHeight: 200.0,
-                  leading: const SizedBox(),
-                  flexibleSpace: FlexibleSpaceBar(
-                    background: Image.network(
-                      'https://i.imgur.com/fSZwM7G.jpg',
-                      fit: BoxFit.cover,
-                    ),
-                  ),
-                ),
-                const SliverToBoxAdapter(
-                  child: Text(
-                    'Lorem Ipsum Dolor',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 72,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                ),
-                SliverToBoxAdapter(
-                  child: SuperEditor(
+            child: ScrollConfiguration(
+              behavior: _ScrollBehavior(),
+              child: CustomScrollView(
+                key: _scrollableKey,
+                controller: _scrollController,
+                slivers: [
+                  // SliverAppBar(
+                  //   title: const Text(
+                  //     'Rich Text Editor Sliver Example',
+                  //   ),
+                  //   expandedHeight: 200.0,
+                  //   leading: const SizedBox(),
+                  //   flexibleSpace: FlexibleSpaceBar(
+                  //     background: Image.network(
+                  //       'https://i.imgur.com/fSZwM7G.jpg',
+                  //       fit: BoxFit.cover,
+                  //     ),
+                  //   ),
+                  // ),
+                  // const SliverToBoxAdapter(
+                  //   child: Text(
+                  //     'Lorem Ipsum Dolor',
+                  //     style: TextStyle(
+                  //       fontWeight: FontWeight.bold,
+                  //       fontSize: 72,
+                  //     ),
+                  //     textAlign: TextAlign.center,
+                  //   ),
+                  // ),
+                  SuperEditor(
                     editor: _docEditor,
                     document: _doc,
                     composer: _composer,
@@ -88,29 +133,29 @@ class _SliverExampleEditorState extends State<SliverExampleEditor> {
                       scrollingMinimapId: _showDebugPaint ? "sliver_demo" : null,
                     ),
                   ),
-                ),
-                SliverList(
-                  delegate: SliverChildBuilderDelegate(
-                    (BuildContext context, int index) {
-                      return ListTile(
-                        title: Text('$index'),
-                        onTap: () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(
-                                'SliverList element tapped with index $index.',
-                              ),
-                              duration: const Duration(milliseconds: 500),
-                            ),
-                          );
-                        },
-                      );
-                    },
-                    // Or, uncomment the following line:
-                    // childCount: 3,
-                  ),
-                ),
-              ],
+                  // SliverList(
+                  //   delegate: SliverChildBuilderDelegate(
+                  //     (BuildContext context, int index) {
+                  //       return ListTile(
+                  //         title: Text('$index'),
+                  //         onTap: () {
+                  //           ScaffoldMessenger.of(context).showSnackBar(
+                  //             SnackBar(
+                  //               content: Text(
+                  //                 'SliverList element tapped with index $index.',
+                  //               ),
+                  //               duration: const Duration(milliseconds: 500),
+                  //             ),
+                  //           );
+                  //         },
+                  //       );
+                  //     },
+                  //     // Or, uncomment the following line:
+                  //     // childCount: 3,
+                  //   ),
+                  // ),
+                ],
+              ),
             ),
           ),
           if (_showDebugPaint) _buildScrollingMinimap(),
@@ -154,18 +199,23 @@ MutableDocument _createInitialDocument() {
         },
       ),
       HorizontalRuleNode(id: Editor.createNodeId()),
-      ParagraphNode(
-        id: Editor.createNodeId(),
-        text: AttributedText(
-          'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Phasellus sed sagittis urna. Aenean mattis ante justo, quis sollicitudin metus interdum id. Aenean ornare urna ac enim consequat mollis. In aliquet convallis efficitur. Phasellus convallis purus in fringilla scelerisque. Ut ac orci a turpis egestas lobortis. Morbi aliquam dapibus sem, vitae sodales arcu ultrices eu. Duis vulputate mauris quam, eleifend pulvinar quam blandit eget.',
+      for (int i = 0; i < 5; ++i) ...[
+        for (int i = 0; i < 100; ++i)
+          ParagraphNode(
+            id: Editor.createNodeId(),
+            text: AttributedText(
+              'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Phasellus sed sagittis urna. Aenean mattis ante justo, quis sollicitudin metus interdum id. Aenean ornare urna ac enim consequat mollis. In aliquet convallis efficitur. Phasellus convallis purus in fringilla scelerisque. Ut ac orci a turpis egestas lobortis. Morbi aliquam dapibus sem, vitae sodales arcu ultrices eu. Duis vulputate mauris quam, eleifend pulvinar quam blandit eget.',
+            ),
+          ),
+        HorizontalRuleNode(id: Editor.createNodeId()),
+      ],
+      for (int i = 0; i < 100; ++i)
+        ParagraphNode(
+          id: Editor.createNodeId(),
+          text: AttributedText(
+            'Cras vitae sodales nisi. Vivamus dignissim vel purus vel aliquet. Sed viverra diam vel nisi rhoncus pharetra. Donec gravida ut ligula euismod pharetra. Etiam sed urna scelerisque, efficitur mauris vel, semper arcu. Nullam sed vehicula sapien. Donec id tellus volutpat, eleifend nulla eget, rutrum mauris.',
+          ),
         ),
-      ),
-      ParagraphNode(
-        id: Editor.createNodeId(),
-        text: AttributedText(
-          'Cras vitae sodales nisi. Vivamus dignissim vel purus vel aliquet. Sed viverra diam vel nisi rhoncus pharetra. Donec gravida ut ligula euismod pharetra. Etiam sed urna scelerisque, efficitur mauris vel, semper arcu. Nullam sed vehicula sapien. Donec id tellus volutpat, eleifend nulla eget, rutrum mauris.',
-        ),
-      ),
       ParagraphNode(
         id: Editor.createNodeId(),
         text: AttributedText(

@@ -107,6 +107,10 @@ abstract class DocumentLayout {
   DocumentPosition? findLastSelectablePosition();
 }
 
+abstract class ScrollableDocumentLayout extends DocumentLayout {
+  void ensureVisible(DocumentPosition position);
+}
+
 /// Contract for all widgets that operate as document components
 /// within a [DocumentLayout].
 ///

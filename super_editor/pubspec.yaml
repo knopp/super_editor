@@ -32,6 +32,8 @@ dependencies:
   url_launcher: ^6.1.9
   uuid: ^3.0.3
   overlord: ^0.0.3+4
+  super_sliver_list:
+    path: ../../flutter/super_sliver_list
 
   # Dependencies for testing tools that we ship with super_editor
   flutter_test:

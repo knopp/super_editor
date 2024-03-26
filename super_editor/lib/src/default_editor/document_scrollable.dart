@@ -180,18 +180,18 @@ class _DocumentScrollableState extends State<DocumentScrollable> with SingleTick
   Widget build(BuildContext context) {
     final ancestorScrollable = context.findAncestorScrollableWithVerticalScroll;
     _ancestorScrollPosition = ancestorScrollable?.position;
-
-    return Stack(
-      children: [
-        _ancestorScrollPosition == null //
-            ? _buildScroller(child: widget.child) //
-            : widget.child,
-        if (widget.showDebugPaint)
-          ..._buildScrollingDebugPaint(
-            includesScrollView: ancestorScrollable == null,
-          ),
-      ],
-    );
+    return widget.child;
+    // return Stack(
+    //   children: [
+    //     _ancestorScrollPosition == null //
+    //         ? _buildScroller(child: widget.child) //
+    //         : widget.child,
+    //     if (widget.showDebugPaint)
+    //       ..._buildScrollingDebugPaint(
+    //         includesScrollView: ancestorScrollable == null,
+    //       ),
+    //   ],
+    // );
   }
 
   Widget _buildScroller({

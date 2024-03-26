@@ -1,10 +1,13 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:super_editor/src/core/document_debug_paint.dart';
+import 'package:super_editor/src/core/document_selection.dart';
 import 'package:super_editor/src/default_editor/document_scrollable.dart';
 import 'package:super_editor/src/default_editor/layout_single_column/_layout.dart';
 import 'package:super_editor/src/default_editor/layout_single_column/_presenter.dart';
 import 'package:super_editor/src/infrastructure/content_layers.dart';
 import 'package:super_editor/src/infrastructure/documents/document_scroller.dart';
+import 'package:super_editor/src/infrastructure/sliver_hybrid_stack.dart';
 import 'package:super_editor/src/infrastructure/viewport_size_reporting.dart';
 
 /// A scaffold that combines pieces to create a scrolling single-column document, with
@@ -23,6 +26,7 @@ class DocumentScaffold<ContextType> extends StatefulWidget {
     required this.scroller,
     required this.presenter,
     required this.componentBuilders,
+    required this.documentSelection,
     this.underlays = const [],
     this.overlays = const [],
     this.debugPaint = const DebugPaintConfig(),
@@ -71,6 +75,8 @@ class DocumentScaffold<ContextType> extends StatefulWidget {
   /// Paints some extra visual ornamentation to help with debugging.
   final DebugPaintConfig debugPaint;
 
+  final ValueListenable<DocumentSelection?>? documentSelection;
+
   @override
   State<DocumentScaffold> createState() => _DocumentScaffoldState();
 }
@@ -91,16 +97,13 @@ class _DocumentScaffoldState extends State<DocumentScaffold> {
   Widget _buildDocumentScrollable({
     required Widget child,
   }) {
-    return ViewportBoundsReporter(
-      viewportOuterConstraints: _contentConstraints,
-      child: DocumentScrollable(
-        autoScroller: widget.autoScrollController,
-        scrollController: widget.scrollController,
-        scrollingMinimapId: widget.debugPaint.scrollingMinimapId,
-        scroller: widget.scroller,
-        showDebugPaint: widget.debugPaint.scrolling,
-        child: child,
-      ),
+    return DocumentScrollable(
+      autoScroller: widget.autoScrollController,
+      scrollController: widget.scrollController,
+      scrollingMinimapId: widget.debugPaint.scrollingMinimapId,
+      scroller: widget.scroller,
+      showDebugPaint: widget.debugPaint.scrolling,
+      child: child,
     );
   }
 
@@ -112,45 +115,34 @@ class _DocumentScaffoldState extends State<DocumentScaffold> {
   Widget _buildGestureSystem({
     required Widget child,
   }) {
-    return ViewportBoundsReplicator(
-      viewportOuterConstraints: _contentConstraints,
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          // A layer that sits beneath the document and handles gestures.
-          // It's beneath the document so that components that include
-          // interactive UI, like a Checkbox, can intercept their own
-          // touch events.
-          //
-          // This layer is placed outside of `ContentLayers` because this
-          // layer needs to be wider than the document, to fill all available
-          // space.
-          Positioned.fill(
-            child: widget.gestureBuilder(context),
-          ),
-          child,
-        ],
-      ),
+    return SliverHybridStack(
+      children: [
+        // A layer that sits beneath the document and handles gestures.
+        // It's beneath the document so that components that include
+        // interactive UI, like a Checkbox, can intercept their own
+        // touch events.
+        //
+        // This layer is placed outside of `ContentLayers` because this
+        // layer needs to be wider than the document, to fill all available
+        // space.
+        widget.gestureBuilder(context),
+        child,
+      ],
     );
   }
 
   Widget _buildDocumentLayout() {
-    return Align(
-      alignment: Alignment.topCenter,
-      child: CompositedTransformTarget(
-        link: widget.documentLayoutLink,
-        child: ContentLayers(
-          content: (onBuildScheduled) => SingleColumnDocumentLayout(
-            key: widget.documentLayoutKey,
-            presenter: widget.presenter,
-            componentBuilders: widget.componentBuilders,
-            onBuildScheduled: onBuildScheduled,
-            showDebugPaint: widget.debugPaint.layout,
-          ),
-          underlays: widget.underlays,
-          overlays: widget.overlays,
-        ),
+    return ContentLayers(
+      content: (onBuildScheduled) => SingleColumnDocumentLayout(
+        key: widget.documentLayoutKey,
+        presenter: widget.presenter,
+        componentBuilders: widget.componentBuilders,
+        onBuildScheduled: onBuildScheduled,
+        showDebugPaint: widget.debugPaint.layout,
+        documentSelection: widget.documentSelection,
       ),
+      underlays: widget.underlays,
+      overlays: widget.overlays,
     );
   }
 }

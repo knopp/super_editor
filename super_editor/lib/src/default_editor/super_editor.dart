@@ -32,6 +32,7 @@ import 'package:super_editor/src/infrastructure/platforms/mac/mac_ime.dart';
 import 'package:super_editor/src/infrastructure/platforms/platform.dart';
 import 'package:super_editor/src/infrastructure/signal_notifier.dart';
 import 'package:super_editor/src/infrastructure/text_input.dart';
+import 'package:super_editor/src/infrastructure/render_object_ext.dart';
 import 'package:super_text_layout/super_text_layout.dart';
 
 import '../infrastructure/document_gestures_interaction_overrides.dart';
@@ -593,8 +594,7 @@ class SuperEditorState extends State<SuperEditor> {
             editor: widget.editor,
             document: widget.document,
             selection: _composer.selectionNotifier,
-            isDocumentLayoutAvailable: () =>
-                (_docLayoutKey.currentContext?.findRenderObject() as RenderBox?)?.hasSize == true,
+            isDocumentLayoutAvailable: () => _docLayoutKey.currentContext?.findRenderObject()?.hasSize == true,
             getDocumentLayout: () => editContext.documentLayout,
             placeCaretAtEndOfDocumentOnGainFocus: widget.selectionPolicies.placeCaretAtEndOfDocumentOnGainFocus,
             restorePreviousSelectionOnGainFocus: widget.selectionPolicies.restorePreviousSelectionOnGainFocus,
@@ -603,6 +603,7 @@ class SuperEditorState extends State<SuperEditor> {
               child: _buildPlatformSpecificViewportDecorations(
                 controlsScopeContext,
                 child: DocumentScaffold(
+                  documentSelection: _composer.selectionNotifier,
                   documentLayoutLink: _documentLayoutLink,
                   documentLayoutKey: _docLayoutKey,
                   gestureBuilder: _buildGestureInteractor,
@@ -623,7 +624,7 @@ class SuperEditorState extends State<SuperEditor> {
                     (context) {
                       return _SelectionLeadersDocumentLayerBuilder(
                         links: _selectionLinks,
-                        showDebugLeaderBounds: false,
+                        showDebugLeaderBounds: true,
                       ).build(context, editContext);
                     },
                     // Add all overlays that the app wants.
