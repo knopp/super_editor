@@ -1263,7 +1263,7 @@ class _AndroidDocumentTouchInteractorState extends State<AndroidDocumentTouchInt
       children: [
         // Layer below
         RawGestureDetector(
-          behavior: HitTestBehavior.translucent,
+          behavior: HitTestBehavior.opaque,
           gestures: <Type, GestureRecognizerFactory>{
             TapSequenceGestureRecognizer: GestureRecognizerFactoryWithHandlers<TapSequenceGestureRecognizer>(
               () => TapSequenceGestureRecognizer(),
