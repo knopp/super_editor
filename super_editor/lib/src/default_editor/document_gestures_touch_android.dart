@@ -1291,7 +1291,7 @@ class _AndroidDocumentTouchInteractorState extends State<AndroidDocumentTouchInt
   Widget build(BuildContext context) {
     final gestureSettings = MediaQuery.maybeOf(context)?.gestureSettings;
     return RawGestureDetector(
-      behavior: HitTestBehavior.translucent,
+      behavior: HitTestBehavior.opaque,
       gestures: <Type, GestureRecognizerFactory>{
         TapSequenceGestureRecognizer: GestureRecognizerFactoryWithHandlers<TapSequenceGestureRecognizer>(
           () => TapSequenceGestureRecognizer(),
