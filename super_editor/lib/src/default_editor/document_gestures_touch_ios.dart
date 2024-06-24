@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
@@ -407,8 +408,26 @@ class _IosDocumentTouchInteractorState extends State<IosDocumentTouchInteractor>
     super.dispose();
   }
 
+  Size? _lastSize;
+  ViewPadding? _lastInsets;
+
   @override
   void didChangeMetrics() {
+    // DidChangeMetrics is sometimes called even when metrics doesn't change
+    // (i.e. on iOS with keyboard visible)
+    final view = View.of(context);
+    final size = view.physicalSize;
+    final insets = view.viewInsets;
+    if (size == _lastSize &&
+        _lastInsets?.left == insets.left &&
+        _lastInsets?.right == insets.right &&
+        _lastInsets?.top == insets.top &&
+        _lastInsets?.bottom == insets.bottom) {
+      return;
+    }
+    _lastSize = size;
+    _lastInsets = insets;
+
     // The available screen dimensions may have changed, e.g., due to keyboard
     // appearance/disappearance. Ensure the extent is still visible. Use a
     // post-frame callback to give the rest of the UI a chance to reflow, first.
