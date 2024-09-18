@@ -19,6 +19,7 @@ import 'package:super_editor/src/document_operations/selection_operations.dart';
 import 'package:super_editor/src/infrastructure/_logging.dart';
 import 'package:super_editor/src/infrastructure/content_layers.dart';
 import 'package:super_editor/src/infrastructure/flutter/build_context.dart';
+import 'package:super_editor/src/infrastructure/flutter/eager_pan_gesture_recognizer.dart';
 import 'package:super_editor/src/infrastructure/flutter/flutter_scheduler.dart';
 import 'package:super_editor/src/infrastructure/multi_tap_gesture.dart';
 import 'package:super_editor/src/infrastructure/platforms/android/android_document_controls.dart';
@@ -403,11 +404,12 @@ class AndroidDocumentTouchInteractor extends StatefulWidget {
     required this.selection,
     required this.openSoftwareKeyboard,
     required this.scrollController,
+    required this.fillViewport,
     this.contentTapHandler,
     this.dragAutoScrollBoundary = const AxisOffset.symmetric(54),
     required this.dragHandleAutoScroller,
     this.showDebugPaint = false,
-    this.child,
+    required this.child,
   }) : super(key: key);
 
   final FocusNode focusNode;
@@ -435,9 +437,11 @@ class AndroidDocumentTouchInteractor extends StatefulWidget {
 
   final ValueNotifier<DragHandleAutoScroller?> dragHandleAutoScroller;
 
+  final bool fillViewport;
+
   final bool showDebugPaint;
 
-  final Widget? child;
+  final Widget child;
 
   @override
   State createState() => _AndroidDocumentTouchInteractorState();
@@ -447,14 +451,9 @@ class _AndroidDocumentTouchInteractorState extends State<AndroidDocumentTouchInt
     with WidgetsBindingObserver, SingleTickerProviderStateMixin {
   SuperEditorAndroidControlsController? _controlsController;
 
-  bool _isScrolling = false;
-
   // The ScrollPosition attached to the _ancestorScrollable, if there's an ancestor
   // Scrollable.
   ScrollPosition? _ancestorScrollPosition;
-  // The actual ScrollPosition that's used for the document layout, either
-  // the Scrollable installed by this interactor, or an ancestor Scrollable.
-  ScrollPosition? _activeScrollPosition;
 
   Offset? _globalTapDownOffset;
   Offset? _globalStartDragOffset;
@@ -462,9 +461,6 @@ class _AndroidDocumentTouchInteractorState extends State<AndroidDocumentTouchInt
   Offset? _startDragPositionOffset;
   double? _dragStartScrollOffset;
   Offset? _globalDragOffset;
-
-  /// Holds the drag gesture that scrolls the document.
-  Drag? _scrollingDrag;
 
   final _magnifierGlobalOffset = ValueNotifier<Offset?>(null);
 
@@ -489,8 +485,6 @@ class _AndroidDocumentTouchInteractorState extends State<AndroidDocumentTouchInt
       getViewportBox: () => viewportBox,
     );
 
-    _configureScrollController();
-
     widget.document.addListener(_onDocumentChange);
     widget.selection.addListener(_onSelectionChange);
 
@@ -508,14 +502,6 @@ class _AndroidDocumentTouchInteractorState extends State<AndroidDocumentTouchInt
     _controlsController = SuperEditorAndroidControlsScope.rootOf(context);
 
     _ancestorScrollPosition = context.findAncestorScrollableWithVerticalScroll?.position;
-
-    // On the next frame, check if our active scroll position changed to a
-    // different instance. If it did, move our listener to the new one.
-    //
-    // This is posted to the next frame because the first time this method
-    // runs, we haven't attached to our own ScrollController yet, so
-    // this.scrollPosition might be null.
-    onNextFrame((_) => _updateScrollPositionListener());
   }
 
   @override
@@ -530,11 +516,6 @@ class _AndroidDocumentTouchInteractorState extends State<AndroidDocumentTouchInt
     if (widget.selection != oldWidget.selection) {
       oldWidget.selection.removeListener(_onSelectionChange);
       widget.selection.addListener(_onSelectionChange);
-    }
-
-    if (widget.scrollController != oldWidget.scrollController) {
-      _teardownScrollController();
-      _configureScrollController();
     }
   }
 
@@ -572,8 +553,6 @@ class _AndroidDocumentTouchInteractorState extends State<AndroidDocumentTouchInt
 
     widget.document.removeListener(_onDocumentChange);
     widget.selection.removeListener(_onSelectionChange);
-
-    _teardownScrollController();
 
     widget.dragHandleAutoScroller.value!.dispose();
     widget.dragHandleAutoScroller.value = null;
@@ -616,6 +595,10 @@ class _AndroidDocumentTouchInteractorState extends State<AndroidDocumentTouchInt
     return viewportBox.globalToLocal(globalOffset);
   }
 
+  final _interactor = GlobalKey();
+
+  RenderBox get interactorBox => _interactor.currentContext!.findRenderObject() as RenderBox;
+
   /// Maps the given [interactorOffset] within the interactor's coordinate space
   /// to the same screen position in the viewport's coordinate space.
   ///
@@ -627,44 +610,9 @@ class _AndroidDocumentTouchInteractorState extends State<AndroidDocumentTouchInt
   Offset _interactorOffsetInViewport(Offset interactorOffset) {
     // Viewport might be our box, or an ancestor box if we're inside someone
     // else's Scrollable.
-    final interactorBox = context.findRenderObject() as RenderBox;
     return viewportBox.globalToLocal(
       interactorBox.localToGlobal(interactorOffset),
     );
-  }
-
-  void _configureScrollController() {
-    onNextFrame((_) => scrollPosition.isScrollingNotifier.addListener(_onScrollActivityChange));
-  }
-
-  void _teardownScrollController() {
-    widget.scrollController.removeListener(_onScrollActivityChange);
-
-    if (widget.scrollController.hasClients) {
-      scrollPosition.isScrollingNotifier.removeListener(_onScrollActivityChange);
-    }
-  }
-
-  void _onScrollActivityChange() {
-    final isScrolling = scrollPosition.isScrollingNotifier.value;
-
-    if (isScrolling) {
-      _isScrolling = true;
-
-      // The user started to scroll.
-      // Cancel the timer to stop trying to detect a long press.
-      _tapDownLongPressTimer?.cancel();
-      _tapDownLongPressTimer = null;
-    } else {
-      onNextFrame((_) {
-        // Set our scrolling flag to false on the next frame, so that our tap handlers
-        // have an opportunity to see that the scrollable was scrolling when the user
-        // tapped down.
-        //
-        // See the "on tap down" handler for more info about why this flag is important.
-        _isScrolling = false;
-      });
-    }
   }
 
   void _ensureSelectionExtentIsVisible() {
@@ -722,25 +670,7 @@ class _AndroidDocumentTouchInteractorState extends State<AndroidDocumentTouchInt
     }
   }
 
-  void _updateScrollPositionListener() {
-    final newScrollPosition = scrollPosition;
-    if (newScrollPosition != _activeScrollPosition) {
-      _activeScrollPosition = newScrollPosition;
-    }
-  }
-
-  bool _wasScrollingOnTapDown = false;
   void _onTapDown(TapDownDetails details) {
-    // When the user scrolls and releases, the scrolling continues with momentum.
-    // If the user then taps down again, the momentum stops. When this happens, we
-    // still receive tap callbacks. But we don't want to take any further action,
-    // like moving the caret, when the user taps to stop scroll momentum. We have
-    // to carefully watch the scrolling activity to recognize when this happens.
-    // We can't check whether we're scrolling in "on tap up" because by then the
-    // scrolling has already stopped. So we log whether we're scrolling "on tap down"
-    // and then check this flag in "on tap up".
-    _wasScrollingOnTapDown = _isScrolling;
-
     final position = scrollPosition;
     if (position is ScrollPositionWithSingleContext) {
       position.goIdle();
@@ -793,13 +723,6 @@ class _AndroidDocumentTouchInteractorState extends State<AndroidDocumentTouchInt
       _longPressStrategy = null;
       _magnifierGlobalOffset.value = null;
       _showAndHideEditingControlsAfterTapSelection(didTapOnExistingSelection: false);
-      return;
-    }
-
-    if (_wasScrollingOnTapDown) {
-      // The scrollable was scrolling when the user touched down. We expect that the
-      // touch down stopped the scrolling momentum. We don't want to take any further
-      // action on this touch event. The user will tap again to change the selection.
       return;
     }
 
@@ -1039,24 +962,29 @@ class _AndroidDocumentTouchInteractorState extends State<AndroidDocumentTouchInt
       return;
     }
 
-    if (widget.selection.value?.isCollapsed == true) {
-      final caretPosition = widget.selection.value!.extent;
-      final tapDocumentOffset = widget.getDocumentLayout().getDocumentOffsetFromAncestorOffset(_globalTapDownOffset!);
+    final isTapOverCaret = _isOverCaret(_globalTapDownOffset!);
 
-      final tapPosition = widget.getDocumentLayout().getDocumentPositionAtOffset(tapDocumentOffset);
-      final isTapOverCaret = tapPosition != null && caretPosition.isEquivalentTo(tapPosition);
+    if (isTapOverCaret) {
+      _onCaretDragPanStart(details);
+      return;
+    }
+  }
 
-      if (isTapOverCaret) {
-        _onCaretDragPanStart(details);
-        return;
-      }
+  bool _isOverCaret(Offset globalOffset) {
+    if (widget.selection.value?.isCollapsed != true) {
+      return false;
     }
 
-    _scrollingDrag = scrollPosition.drag(details, () {
-      // Allows receiving touches while scrolling due to scroll momentum.
-      // This is needed to allow the user to stop scrolling by tapping down.
-      scrollPosition.context.setIgnorePointer(false);
-    });
+    final collapsedPosition = widget.selection.value?.extent;
+    if (collapsedPosition == null) {
+      return false;
+    }
+
+    final extentRect = _docLayout.getRectForPosition(collapsedPosition)!;
+    final caretRect = Rect.fromLTWH(extentRect.left - 1, extentRect.center.dy, 1, 1).inflate(24);
+
+    final tapDocumentOffset = widget.getDocumentLayout().getDocumentOffsetFromAncestorOffset(_globalTapDownOffset!);
+    return caretRect.contains(tapDocumentOffset);
   }
 
   void _onLongPressPanStart(DragStartDetails details) {
@@ -1098,11 +1026,6 @@ class _AndroidDocumentTouchInteractorState extends State<AndroidDocumentTouchInt
       _onCaretDragPanUpdate(details);
       return;
     }
-
-    if (_scrollingDrag != null) {
-      // The user is trying to scroll the document. Change the scroll offset.
-      _scrollingDrag!.update(details);
-    }
   }
 
   void _onLongPressPanUpdate(DragUpdateDetails details) {
@@ -1141,7 +1064,7 @@ class _AndroidDocumentTouchInteractorState extends State<AndroidDocumentTouchInt
   void _updateOverlayControlsOnLongPressDrag() {
     final extentDocumentOffset = _docLayout.getRectForPosition(widget.selection.value!.extent)!.center;
     final extentGlobalOffset = _docLayout.getAncestorOffsetFromDocumentOffset(extentDocumentOffset);
-    final extentInteractorOffset = (context.findRenderObject() as RenderBox).globalToLocal(extentGlobalOffset);
+    final extentInteractorOffset = interactorBox.globalToLocal(extentGlobalOffset);
     final extentViewportOffset = _interactorOffsetInViewport(extentInteractorOffset);
     widget.dragHandleAutoScroller.value!.updateAutoScrollHandleMonitoring(dragEndInViewport: extentViewportOffset);
 
@@ -1158,16 +1081,12 @@ class _AndroidDocumentTouchInteractorState extends State<AndroidDocumentTouchInt
       _onCaretDragEnd();
       return;
     }
-
-    if (_scrollingDrag != null) {
-      // The user was performing a drag gesture to scroll the document.
-      // End the scroll activity and let the document scrolling with momentum.
-      _scrollingDrag!.end(details);
-    }
   }
 
   void _onPanCancel() {
-    if (_isLongPressInProgress) {
+    // When _tapDownLongPressTimer is not null we're waiting for either tapUp or tapCancel,
+    // which will deal with the long press.
+    if (_tapDownLongPressTimer == null &&_isLongPressInProgress) {
       _onLongPressEnd();
       return;
     }
@@ -1175,12 +1094,6 @@ class _AndroidDocumentTouchInteractorState extends State<AndroidDocumentTouchInt
     if (_isCaretDragInProgress) {
       _onCaretDragEnd();
       return;
-    }
-
-    if (_scrollingDrag != null) {
-      // The user was performing a drag gesture to scroll the document.
-      // End the drag gesture.
-      _scrollingDrag!.cancel();
     }
   }
 
@@ -1294,8 +1207,32 @@ class _AndroidDocumentTouchInteractorState extends State<AndroidDocumentTouchInt
   @override
   Widget build(BuildContext context) {
     final gestureSettings = MediaQuery.maybeOf(context)?.gestureSettings;
-    return RawGestureDetector(
-      behavior: HitTestBehavior.opaque,
+    final layerAbove = RawGestureDetector(
+      key: _interactor,
+      behavior: HitTestBehavior.translucent,
+      gestures: <Type, GestureRecognizerFactory>{
+        EagerPanGestureRecognizer: GestureRecognizerFactoryWithHandlers<EagerPanGestureRecognizer>(
+          () => EagerPanGestureRecognizer(),
+          (EagerPanGestureRecognizer instance) {
+            instance
+              ..canAccept = () {
+                if (_globalTapDownOffset == null) {
+                  return false;
+                }
+                return _isOverCaret(_globalTapDownOffset!) || _isLongPressInProgress;
+              }
+              ..dragStartBehavior = DragStartBehavior.down
+              ..onStart = _onPanStart
+              ..onUpdate = _onPanUpdate
+              ..onEnd = _onPanEnd
+              ..onCancel = _onPanCancel
+              ..gestureSettings = gestureSettings;
+          },
+        ),
+      },
+    );
+    final layerBelow = RawGestureDetector(
+      behavior: HitTestBehavior.translucent,
       gestures: <Type, GestureRecognizerFactory>{
         TapSequenceGestureRecognizer: GestureRecognizerFactoryWithHandlers<TapSequenceGestureRecognizer>(
           () => TapSequenceGestureRecognizer(),
@@ -1309,20 +1246,15 @@ class _AndroidDocumentTouchInteractorState extends State<AndroidDocumentTouchInt
               ..gestureSettings = gestureSettings;
           },
         ),
-        VerticalDragGestureRecognizer: GestureRecognizerFactoryWithHandlers<VerticalDragGestureRecognizer>(
-          () => VerticalDragGestureRecognizer(),
-          (VerticalDragGestureRecognizer recognizer) {
-            recognizer
-              ..dragStartBehavior = DragStartBehavior.down
-              ..onStart = _onPanStart
-              ..onUpdate = _onPanUpdate
-              ..onEnd = _onPanEnd
-              ..onCancel = _onPanCancel
-              ..gestureSettings = gestureSettings;
-          },
-        ),
       },
-      child: widget.child,
+    );
+    return SliverHybridStack(
+      fillViewport: widget.fillViewport,
+      children: [
+        layerBelow,
+        widget.child,
+        layerAbove,
+      ],
     );
   }
 }
